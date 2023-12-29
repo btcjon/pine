@@ -1,12 +1,27 @@
+// forex lot sizing
+// 1. The user inputs the lot sizes for base orders and safe orders, both for buying (base_order_lots, safe_order_lots) and selling (base_S_order_lots, safe_S_order_lots).
+
+// 2. A custom function unitsToLots(units) is defined to convert units into lot sizes. This function takes the number of units, divides it by 100,000 (since 1 lot is 100,000 units), rounds it to 2 decimal places, and then converts it back to units.
+
+// 3. The script checks if the account currency is the same as the base or quote currency, or neither. This is done to handle risk conversion purposes.
+
+// 4. Depending on the account currency, a conversion rate is determined.
+
+// 5. The input lot sizes are then converted to units by multiplying them by 100,000. This is done for base_order, safe_order, base_S_order, and safe_S_order.
+
+// So, the script allows the user to input lot sizes, and internally converts these lot sizes to units for further calculations.
+
 //@version=5
-strategy('TTB DCA 7.2S', overlay=true, initial_capital=1000000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false, max_bars_back=4900)
+// strategy('TTB DCA 7.1L', overlay=true, pyramiding=999, calc_on_every_tick=false, default_qty_type=strategy.cash, default_qty_value=1, initial_capital=100000, commission_value=0.00, slippage=0, max_bars_back=4900)
+
+strategy('TTB DCA 7.1L', overlay=true, initial_capital=1000000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false, max_bars_back=4900)
 
 
 
 import thetradingbot/ttbcolors/1 as TTBColors
 
 source_type = input.string('Close', 'Source', options=['Close', 'Open', 'High', 'Low', 'HL2', 'HLC3', 'OHLC4', 'Median Body', 'Weighted Close', 'Trend Biased', 'Trend Biased Extreme'])
-direction = input.string(defval='Short', title='Trading Direction', options=['All', 'Long', 'Short'])
+direction = input.string(defval='Long', title='Trading Direction', options=['All', 'Long', 'Short'])
 
 
 source_function(type) =>
@@ -55,7 +70,7 @@ else if direction == 'Short'
 
 // Strategy Inputs
 ID = input(defval='6700960415957', title='ID')
-version = input(defval='7-2', title='version')
+version = input(defval='7-1', title='version')
 test = input(defval='1', title='test')
 safe_order_step_scale_Multiplier = input(1.3, title="Safe Order Step Scale Multiplier")
 groupTitleLongInputs = "Long Inputs"
@@ -63,8 +78,8 @@ price_deviation = input.float(0.04, title='Price deviation to open safety orders
 take_profit = input.float(0.1, title='Target Take Profit (%)', step=0.1, minval=0.0) / 100
 // base_order = input.float(10000, "Base Order Size")
 // safe_order = input.float(10000, "Safe Order Size")
-base_order_lots = input.float(0.4, "Base Order Size (Lots)")
-safe_order_lots = input.float(0.4, "Safe Order Size (Lots)")
+base_order_lots = input.float(0.01, "Base Order Size (Lots)")
+safe_order_lots = input.float(0.01, "Safe Order Size (Lots)")
 safe_order_volume_scale = input.float(1, step=0.1, title='Safety order volume scale')
 safe_order_step_scale = input.float(1.3, step=0.1, title='Safety order step scale')
 max_safe_order = input(6, title='max no. of safe orders')
@@ -73,8 +88,8 @@ price_S_deviation = input.float(0.04, title='Price deviation to open short safet
 take_S_profit = input.float(0.1, title='Short Target Take Profit (%)', step=0.1, minval=0.0) / 100
 // base_S_order = input.float(10000, title='base sell order')
 // safe_S_order = input.float(10000, title='safe sell order')
-base_S_order_lots = input.float(0.4, title='base sell order (Lots)')
-safe_S_order_lots = input.float(0.4, title='safe sell order (Lots)')
+base_S_order_lots = input.float(0.01, title='base sell order (Lots)')
+safe_S_order_lots = input.float(0.01, title='safe sell order (Lots)')
 safe_S_order_volume_scale = input.float(1, step=0.1, title='Safety sell order volume scale')
 safe_S_order_step_scale = input.float(1.3, step=0.1, title='Safety sell order step scale')
 max_S_safe_order = input(6, title='max no. of sell safe orders')
@@ -565,6 +580,24 @@ if barstate.islast and NW_repaint
         
         NW_y1 := NW_nwe.get(i)
 
+//-----------------------------------------------------------------------------}
+//Dashboard
+//-----------------------------------------------------------------------------{
+// var NW_tb = table.new(position.top_right, 1, 1
+//   , bgcolor = #1e222d
+//   , border_color = #373a46
+//   , border_width = 1
+//   , frame_color = #373a46
+//   , frame_width = 1)
+
+// if NW_repaint
+//     NW_tb.cell(0, 0, 'Repainting Mode Enabled', text_color = color.white, text_size = size.small)
+
+//-----------------------------------------------------------------------------}
+//Plot
+//-----------------------------------------------------------------------------}
+//plot(NW_repaint ? na : NW_out + NW_mae, 'Upper', NW_upCss)
+//plot(NW_repaint ? na : NW_out - NW_mae, 'Lower', NW_dnCss)
 
 //Crossing Arrows
 plotshape(NW_showPlots and ta.crossunder(close, NW_out - NW_mae) ? low : na, "Crossunder", shape.labelup, location.absolute, color(na), 0 , text = '▲', textcolor = NW_upCss, size = size.tiny)
@@ -587,7 +620,6 @@ MSlength  = input(14, 'Pivot Lookback', group = groupTitleStructureSettings)
 incr    = input.float(80, 'Increment Factor %', minval = 0, group = groupTitleStructureSettings)
 StrucTF1 = input(title="StrucTF1", defval="60", group = groupTitleStructureSettings)
 showMS  = input(false, "Show Structures", group = groupTitleStructureSettings)
-showStrucPlots  = input(false, "Show Struc Plots", group = groupTitleStructureSettings)
 
 resetOn = 'CHoCH'
 
@@ -707,17 +739,13 @@ css = (ms > 0) ? na
   : os == 1 ? bullCss
   : bearCss
 
-// plot_price = plot(close, editable = false, display = display.none)
-// plot_ts    = plot(ts, 'Trailing Stop', color = css)
-
-plot_price = plot(showStrucPlots ? close : na, editable = false, display = display.none)
-plot_ts    = plot(showStrucPlots ? ts : na, 'Trailing Stop', color = css)
+plot_price = plot(close, editable = false, display = display.none)
+plot_ts    = plot(ts, 'Trailing Stop', color = css)
 
 css_area = (close - ts) * os < 0 ? retCss
   : css
 
-//fill(plot_price, plot_ts, color.new(css_area, areaTransp))
-fill(plot_price, plot_ts, color.new(showStrucPlots ? css_area : na, areaTransp))
+fill(plot_price, plot_ts, color.new(css_area, areaTransp))
 
 // trend change plots
 osChange = os != os[1]
@@ -815,7 +843,7 @@ take_S_profit_level := avg_price * (1 - take_S_profit)
 ///Strategy Inputs
 groupTitleLongEntry = "Long Entry"
 trigger_long_Input = input.bool(false, "Trigger Long", group = groupTitleLongEntry)
-Struc_trigger_long_Input = input.bool(false, "Struc Trigger Long", group = groupTitleLongEntry)
+Struc_trigger_long_Input = input.bool(true, "Struc Trigger Long", group = groupTitleLongEntry)
 NWbuyTriggerInput = input.bool(false, "NW Buy Trigger", group = groupTitleLongEntry)
 rmi_buyInput = input.bool(false, "RMI Buy", group = groupTitleLongEntry)
 STlongTriggerInput = input.bool(false, "ST Long Trigger", group = groupTitleLongEntry)
@@ -823,13 +851,17 @@ ST2longTriggerInput = input.bool(false, "ST2 Long Trigger", group = groupTitleLo
 HTbuyInput = input.bool(false, "HT Buy", group = groupTitleLongEntry)
 rmi_buy_filterInput = input.bool(false, "RMI Buy Filter", group = groupTitleLongEntry)
 STlongFilterInput = input.bool(false, "ST Long Filter", group = groupTitleLongEntry)
-ST2longFilterInput = input.bool(false, "ST2 Long Filter", group = groupTitleLongEntry)
+ST2longFilterInput = input.bool(true, "ST2 Long Filter", group = groupTitleLongEntry)
 DomMCADRisisingBuyFilterInput = input.bool(false, "DomMCAD Rising Buy Filter", group = groupTitleLongEntry)
 DomMCAD_OB_BuyFilterInput = input.bool(false, "DomMCAD OB Buy Filter", group = groupTitleLongEntry)
 DomMCAD_OS_BuyFilterInput = input.bool(false, "DomMCAD OS Buy Filter", group = groupTitleLongEntry)
-SOTTbullishFilterInput = input.bool(false, "SOTT bullish Filter", group = groupTitleLongEntry)
+SOTTbullishFilterInput = input.bool(true, "SOTT bullish Filter", group = groupTitleLongEntry)
 trendingUp1HFilterInput = input.bool(false, "1H Trending Up Filter", group = groupTitleLongEntry)
-
+//JMA1LongTriggerInput = input.bool(false, "JMA1 Long Trigger", group = groupTitleLongEntry)
+//JMA1LongFilterInput = input.bool(false, "JMA1 Long Filter", group = groupTitleLongEntry)
+//JMA2LongTriggerInput = input.bool(false, "JMA2 Long Trigger", group = groupTitleLongEntry)
+//JMA2LongFilterInput = input.bool(false, "JMA2 Long Filter", group = groupTitleLongEntry)
+//AIbuyInput = input.bool(true, "AI Buy", group = groupTitleLongEntry)
 
 
 groupTitleShortEntry = "Short Entry"
@@ -848,13 +880,18 @@ DomMCAD_OB_SellFilterInput = input.bool(false, "DomMCAD OB Sell Filter", group =
 SOTTbearishFilterInput = input.bool(false, "SOTT bearish Filter", group = groupTitleShortEntry)
 NWsellTriggerInput = input.bool(false, "NW Sell Trigger", group = groupTitleShortEntry)
 trendingDown1HFilterInput = input.bool(false, "1H Trending Down Filter", group = groupTitleShortEntry)
+//JMA1ShortTriggerInput = input.bool(false, "JMA1 Short Trigger", group = groupTitleShortEntry)
+//JMA1ShortFilterInput = input.bool(false, "JMA1 Short Filter", group = groupTitleShortEntry)
+//JMA2ShortTriggerInput = input.bool(false, "JMA2 Short Trigger", group = groupTitleShortEntry)
+//JMA2ShortFilterInput = input.bool(false, "JMA2 Short Filter", group = groupTitleShortEntry)
+//AIsellInput = input.bool(false, "AI Sell", group = groupTitleShortEntry)
+
 
 groupTitleSOsExit = "SOs and Exit"
 use_rmi_filter_for_subsequent_sos = input.bool(true, "Use RMI Filter for subsequent SOs", group = groupTitleSOsExit)
-use_ST2longFilter_for_SO3 = input.bool(false, "Use ST2longFilter for SO 3", group = groupTitleSOsExit)
-use_ST2shortFilter_for_SO3 = input.bool(false, "Use ST2shortFilter for SO 3", group = groupTitleSOsExit)
-use_ST2longTrigger_for_SO3 = input.bool(false, "Use ST2longTrigger for SO 3", group = groupTitleSOsExit)
-use_ST2shortTrigger_for_SO3 = input.bool(false, "Use ST2shortTrigger for SO 3", group = groupTitleSOsExit)
+use_ST2longFilter_for_SO3 = input.bool(true, "Use ST2longFilter for SO 3", group = groupTitleSOsExit)
+use_ST2shortFilter_for_SO3 = input.bool(true, "Use ST2shortFilter for SO 3", group = groupTitleSOsExit)
+use_last_SO_as_SL = input.bool(false, "Use Last SO as Stop Loss", group = groupTitleSOsExit)
 
 // First Position
 //for i = 0 to max_safe_order - 1 by 1
@@ -866,6 +903,19 @@ for j = 0 to max_S_safe_order - 1 by 1
     maxSDev := int((maxSDev + price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
     maxSDev
 
+//strategy.close_all(math.abs(strategy.position_size) != 0 and current_so[1] == 0)
+if math.abs(strategy.position_size) != 0 and current_so[1] == 0
+    strategy.close_all()
+
+var int longEntryBarIndex = na
+var int shortEntryBarIndex = na
+// for the BE stoploss
+var bool hasReachedHalfwayLong = na
+var float halfTakeProfitLevelLong = na
+var bool hasReachedHalfwayShort = na
+var float halfTakeProfitLevelShort = na
+
+//plot(long_trigger ? 1 : 0, title="Long Trigger", color=color.green)
 
 if long and strategy.position_size == 0 and source_function(source_type) > 0 and window and not(hour(time) == 0 and minute(time) < 59) and (rmi_buyInput ? rmi_buy : true) and (STlongTriggerInput ? STlongTrigger : true) and (STlongFilterInput ? STlongFilter : true) and (ST2longTriggerInput ? ST2longTrigger : true) and (ST2longFilterInput ? ST2longFilter : true) and (trigger_long_Input ? trigger == long_trigger : true) and (HTbuyInput ? buySignal : true) and (DomMCADRisisingBuyFilterInput ? DomMCADRisingBuyFilter : true) and (DomMCAD_OB_BuyFilterInput ? DomMCAD_OB_BuyFilter : true) and (DomMCAD_OS_BuyFilterInput ? DomMCAD_OS_BuyFilter : true) and (rmi_buy_filterInput ? rmi_buy_filter : true) and (SOTTbullishFilterInput ? SOTTbullish : true) and (NWbuyTriggerInput ? NWbuy : true) and (trendingUp1HFilterInput ? trendingUp1H : true) and (Struc_trigger_long_Input ? trendUp : true)
     _string_long = 'type=order,order-type=long,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + '",entry=true'
@@ -880,6 +930,9 @@ if long and strategy.position_size == 0 and source_function(source_type) > 0 and
     avg_price := close
     total_funds_in_trade := avg_price * base_order_lots * 100000
     total_qty_in_trade := base_order_lots * 100000
+    //total_qty_in_trade
+    longEntryBarIndex := bar_index
+    hasReachedHalfwayLong := na
 
 
 else if short and strategy.position_size == 0 and source_function(source_type) > 0 and window and not(hour(time) == 0 and minute(time) < 59) and (rmi_sellInput ? rmi_sell : true) and (STshortTriggerInput ? STshortTrigger : true) and (STshortFilterInput ? STshortFilter : true) and (ST2shortTriggerInput ? ST2shortTrigger : true) and (ST2shortFilterInput ? ST2shortFilter : true) and (trigger_short_Input ? trigger == short_trigger : true) and (HTsellInput ? sellSignal : true)  and (DomMCADFallingSellFilterInput ? DomMCADFallingSellFilter : true) and (DomMCAD_OS_SellFilterInput ? DomMCAD_OS_SellFilter : true) and (DomMCAD_OB_SellFilterInput ? DomMCAD_OB_SellFilter : true) and (rmi_sell_filterInput ? rmi_sell_filter : true) and (SOTTbearishFilterInput ? SOTTbearish : true) and (NWsellTriggerInput ? NWsell : true) and (trendingDown1HFilterInput ? trendingDown1H : true) and (Struc_trigger_short_Input ? trendDown : true)
@@ -894,6 +947,9 @@ else if short and strategy.position_size == 0 and source_function(source_type) >
     avg_price := close
     total_funds_in_trade := avg_price * base_S_order_lots * 100000
     total_qty_in_trade := base_S_order_lots * 100000
+    //total_qty_in_trade
+    shortEntryBarIndex := bar_index
+    hasReachedHalfwayLong := na
 
 
 //makes the red and green line plot pretty at the position opening
@@ -903,49 +959,138 @@ if strategy.position_size == 0
     S_threshold
 
 
-// Define last_so_price and percent_threshold
-var float last_so_price = na
-percent_threshold = input(0.01, "Percent Threshold")
-
-// Modify the calculation of the threshold for long positions
+//Safety order levels
 if strategy.position_size > 0 and i == 0
     if safe_order_step_scale == 1.0
-        threshold := na(last_so_price) or (close / last_so_price - 1) > percent_threshold ? initial_order - initial_order * price_deviation * safe_order_step_scale * safe_order_step_scale_Multiplier * current_so : na
+        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * safe_order_step_scale_Multiplier * current_so
+        threshold
     else
-        threshold := na(last_so_price) or (close / last_so_price - 1) > percent_threshold ? initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale * safe_order_step_scale_Multiplier, current_so) - 1) / (safe_order_step_scale - 1)) : na
+        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale * safe_order_step_scale_Multiplier, current_so) - 1) / (safe_order_step_scale - 1))
+        threshold
 
 // Modify the calculation of the threshold for short positions
-if strategy.position_size < 0 and i == 0
+else if strategy.position_size < 0 and i == 0
     if safe_S_order_step_scale == 1.0
-        S_threshold := na(last_so_price) or (close / last_so_price - 1) > percent_threshold ? initial_S_order * (1 + price_S_deviation * current_so) : na
+        S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
+        S_threshold
     else
-        S_threshold := na(last_so_price) or (close / last_so_price - 1) > percent_threshold ? initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale * safe_order_step_scale_Multiplier, current_so) - 1) / (safe_S_order_step_scale - 1)) : na
+        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale * safe_order_step_scale_Multiplier, current_so) - 1) / (safe_S_order_step_scale - 1))
+        S_threshold
 
 
 // Long SO (Average Down)
-if current_so > 0 and i == 0 and strategy.position_size > 0 and low <= threshold and current_so <= max_safe_order and not(hour(time) == 0 and minute(time) < 59) and (not use_rmi_filter_for_subsequent_sos or rmi_buy_filter) and (use_ST2longFilter_for_SO3 ? ST2longFilter : true) and (use_ST2longTrigger_for_SO3 ? ST2longTrigger : true)
-    _string_long_so = 'type=order,order-type=long,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(base_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + '",entry=false'
-    strategy.entry('SO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)), strategy.long, qty=base_order * math.pow(safe_order_volume_scale, current_so - 1), alert_message=_string_long_so)
-    total_funds_in_trade += threshold * base_order * math.pow(safe_order_volume_scale, current_so - 1)
-    total_qty_in_trade += base_order * math.pow(safe_order_volume_scale, current_so - 1)
-    avg_price := total_funds_in_trade / total_qty_in_trade
-    current_so += 1
-    tradeCount += 1
-    if not na(threshold)
-        last_so_price := close
+if current_so > 0 and i == 0 and strategy.position_size > 0 and low <= threshold and current_so <= max_safe_order and not(hour(time) == 0 and minute(time) < 59) and (not use_rmi_filter_for_subsequent_sos or rmi_buy_filter) and (use_ST2longFilter_for_SO3 ? ST2longFilter : true)
+    if use_last_SO_as_SL and current_so == max_safe_order
+        _string_close_long = 'type=order,order-type=closelong,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + '"'
+        strategy.close_all(comment='Stop Loss @' + str.tostring(source_function(source_type)), alert_message=_string_close_long)
+        soCount := current_so
+        current_so := 0
+        original_ttp_value := 0
+        price_drop := na
+        initial_price := na
+        diffDays := time - firstBarTime
+        if diffDays > maxDiffDays
+            maxDiffDays := diffDays
+            longest_trade_day := dayofmonth
+            longest_trade_month := month
+            longest_trade_month
+        i := 1
+        initial_order := 0.0
+        avg_price := na
+    else
+        // _string_long_so = 'type=order,order-type=long,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring((base_order * math.pow(safe_order_volume_scale, current_so - 1)) / 10000) + ',comment="' + version + '-' + test + '",entry=false'
+        _string_long_so = 'type=order,order-type=long,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(base_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + '",entry=false'
+        strategy.entry('SO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)), strategy.long, qty=base_order * math.pow(safe_order_volume_scale, current_so - 1), alert_message=_string_long_so)
+        total_funds_in_trade += threshold * base_order * math.pow(safe_order_volume_scale, current_so - 1)
+        total_qty_in_trade += base_order * math.pow(safe_order_volume_scale, current_so - 1)
+        avg_price := total_funds_in_trade / total_qty_in_trade
+        current_so += 1
+        tradeCount += 1
+        //tradeCount
+        hasReachedHalfwayLong := na 
 
 
 // Short SO (Average Up)
-if current_so > 0 and i == 0 and strategy.position_size < 0 and high >= S_threshold and current_so <= max_S_safe_order and not(hour(time) == 0 and minute(time) < 59) and (not use_rmi_filter_for_subsequent_sos or rmi_sell_filter) and (use_ST2shortFilter_for_SO3 ? ST2shortFilter : true) and (use_ST2shortTrigger_for_SO3 ? ST2shortTrigger : true)
-    _string_short_so = 'type=order,order-type=short,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(base_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + '",entry=false'
-    strategy.entry('SSO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)), strategy.short, qty=base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1), alert_message=_string_short_so)
-    total_funds_in_trade += S_threshold * base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1)
-    total_qty_in_trade += base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1)
-    avg_price := total_funds_in_trade / total_qty_in_trade
-    current_so += 1
-    tradeCount += 1
-    if not na(S_threshold)
-        last_so_price := close
+if current_so > 0 and i == 0 and strategy.position_size < 0 and high >= S_threshold and current_so <= max_S_safe_order and not(hour(time) == 0 and minute(time) < 59) and (not use_rmi_filter_for_subsequent_sos or rmi_sell_filter) and (use_ST2shortFilter_for_SO3 ? ST2shortFilter : true)
+    if use_last_SO_as_SL and current_so == max_S_safe_order
+        _string_close_short = 'type=order,order-type=closeshort,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + '"'
+        strategy.close_all(comment='Stop Loss Short @' + str.tostring(source_function(source_type)), alert_message=_string_close_short)
+        soCount := current_so
+        current_so := 0
+        price_pump := na
+        initial_S_price := na
+        diffDays := time - firstBarTime
+        if diffDays > maxDiffDays
+            maxDiffDays := diffDays
+            maxDiffDays
+        initial_S_order := 0.0
+        avg_price := na
+    else
+        _string_short_so = 'type=order,order-type=short,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(base_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + '",entry=false'
+        strategy.entry('SSO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)), strategy.short, qty=base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1), alert_message=_string_short_so)
+        total_funds_in_trade += S_threshold * base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1)
+        total_qty_in_trade += base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1)
+        avg_price := total_funds_in_trade / total_qty_in_trade
+        current_so += 1
+        tradeCount += 1
+        //tradeCount
+        hasReachedHalfwayShort := na
+
+
+// // If Price reaches 1/2 way to our Take Profit level as defined by 'take_profit_level := avg_price * (1 + take_profit)' and price comes back to our 'avg_price' then exit the trade.
+// // LONG
+// // Calculate the halfway to the take profit level for long trades
+// halfTakeProfitLevelLong := avg_price * (1 + take_profit / 2)
+// // Check if the price has reached halfway to the take profit level for long trades
+// if high >= halfTakeProfitLevelLong
+//     hasReachedHalfwayLong := true
+// // If the price has reached halfway to the take profit level for long trades and has come back to the average price, close the trade
+// if hasReachedHalfwayLong and close <= avg_price * 1.0001
+//     _string_close_long = 'type=order,order-type=closelong,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + '"'
+//     strategy.close_all(comment='Close @' + str.tostring(source_function(source_type)), alert_message=_string_close_long)
+//     // Reset variables
+//     soCount := current_so
+//     current_so := 0
+//     original_ttp_value := 0
+//     price_drop := na
+//     initial_price := na
+//     diffDays := time - firstBarTime
+//     i := 1
+//     initial_order := 0.0
+//     avg_price := na
+//     // Update capital
+//     capital *= (1 + total_qty_in_trade * take_profit / 100)
+//     // Reset halfway variables
+//     hasReachedHalfwayLong := na
+//     halfTakeProfitLevelLong := na
+
+// // SHORT
+// // Calculate the halfway to the take profit level for short trades
+// halfTakeProfitLevelShort := avg_price * (1 - take_profit / 2)
+
+// // Check if the price has reached halfway to the take profit level for short trades
+// if low <= halfTakeProfitLevelShort
+//     hasReachedHalfwayShort := true
+
+// // If the price has reached halfway to the take profit level for short trades and has come back to the average price, close the trade
+// if hasReachedHalfwayShort and close >= avg_price * 0.9999
+//     _string_close_short = 'type=order,order-type=closeshort,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + '"'
+//     strategy.close_all(comment='Close @' + str.tostring(source_function(source_type)), alert_message=_string_close_short)
+//     // Reset variables
+//     soCount := current_so
+//     current_so := 0
+//     price_pump := na
+//     initial_S_price := na
+//     diffDays := time - firstBarTime
+//     if diffDays > maxDiffDays
+//         maxDiffDays := diffDays
+//     initial_S_order := 0.0
+//     avg_price := na
+//     // Update capital
+//     capital *= (1 + total_qty_in_trade * take_profit / 100)
+//     // Reset halfway variables
+//     hasReachedHalfwayShort := na
+//     halfTakeProfitLevelShort := na
 
 
 
@@ -974,6 +1119,8 @@ if take_profit_level <= high and strategy.position_size > 0 and not(hour(time) =
     initial_order := 0.0 // Reset the initial order
     avg_price := na // Reset the average price
     capital *= (1 + total_qty_in_trade * take_profit / 100) // Update the capital
+    //capital
+    hasReachedHalfwayLong := na // Reset the halfway long flag
 
 
 // Take Short Profit! 
@@ -992,6 +1139,9 @@ if take_S_profit_level >= low and strategy.position_size < 0 and not(hour(time) 
     initial_S_order := 0.0 // Reset the initial short order
     avg_price := na // Reset the average price
     capital *= (1 + total_qty_in_trade * take_S_profit / 100) // Update the capital
+    //capital
+    hasReachedHalfwayShort := na // Reset the halfway short flag
+
 
 
 //Table building and calculations
@@ -1108,17 +1258,3 @@ if show_table
     table.cell(table_id=Table, column=1, row=15, text=str.tostring(max_drop) + ' %, ' + str.tostring(drop_date) + '/' + str.tostring(drop_month), text_size=text_size, text_color=TTBColors.colorDownlight())
     table.cell(table_id=Table, column=0, row=16, text='Max price pump:', text_size=text_size, text_color=color.gray)
     table.cell(table_id=Table, column=1, row=16, text=str.tostring(max_pump) + ' %, ' + str.tostring(pump_date) + '/' + str.tostring(pump_month), text_size=text_size, text_color=TTBColors.colorDownlight())
-
-
-
-// 1. Define Safety Order Levels: We have a script that calculates safety order (SO) levels for both long and short positions. These levels are calculated based on the initial order price and a certain percentage deviation.
-
-// 2. Add Indicator-Based Conditions: We want to optionally add indicator-based conditions to the safety orders. These conditions include (not use_rmi_filter_for_subsequent_sos or rmi_buy_filter) and (use_ST2longFilter_for_SO3 ? ST2longFilter : true) and (use_ST2longTrigger_for_SO3 ? ST2longTrigger : true).
-
-// 3. Modify SO Levels Based on Conditions: If these indicator-based conditions are met, we want to modify the safety order levels to be a percentage change from the last safety order price. This percentage is defined by percent_threshold.
-
-// 4. Update Last SO Price: Every time a safety order is placed, we want to update last_so_price to the current close price.
-
-// 5. Check Conditions for Placing SO: Before placing a safety order, we want to check if last_so_price is na (which it will be before the first safety order is placed) or if the percentage change from last_so_price to the current close price is greater than percent_threshold. If these conditions are met, a safety order is placed.
-
-// In summary, we're trying to create a more dynamic system for placing safety orders based on both hard levels and indicator-based conditions. This system will allow us to place safety orders at more optimal levels based on the current market conditions.

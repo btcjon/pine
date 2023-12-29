@@ -1,0 +1,110 @@
+//@version=5
+indicator("TTB Jurik MA Basic", "TTB JMA Basic", overlay=true, format=format.price, precision=4, timeframe="", timeframe_gaps=true)
+
+// Inputs //
+src = input(close, title="Source", inline="1")
+Length = input.int(title="Length", defval=7)
+Phase = input.int(title="Phase", defval=50)
+
+
+// My main colors
+var color colorUp = color.new(color.rgb(20, 225, 255), 0) // #14e1ff
+var color colorDown = color.new(color.rgb(191, 54, 255), 0) // #bf36ff
+var color colorUplight = color.new(#74ecff, 0) // #14e1ff
+var color colorDownlight = color.new(#e4acfe, 0) // #bf36ff
+var color colorNeutral = color.new(color.rgb(255, 209, 184), 0) // #FFD1B8
+var color colorUpPlus = color.new(color.rgb(76, 161, 255), 0) // #4CA1FF
+var color colorDownPlus = color.new(color.rgb(220, 56, 250), 0) // #dc38fa
+
+//my trans colors
+var color colorUptrans = color.new(color.rgb(20, 225, 255), 85) // #14e1ff
+var color colorDowntrans = color.new(color.rgb(191, 54, 255), 85) // #bf36ff
+var color colorNeutraltrans = color.new(color.rgb(255, 209, 184), 85) // #FFD1B8
+var color colorUpPlustrans = color.new(color.rgb(76, 161, 255), 85) // #4CA1FF
+var color colorDownPlustrans = color.new(color.rgb(220, 56, 250), 85) // #dc38fa
+var color colorBlackish = color.new(color.rgb(220, 56, 250), 0) // #dc38fa
+
+
+//code from library
+jmapow(src, len) =>
+    upperBand = src
+    lowerBand = src
+    
+    // Volatility
+    del1 = src - nz(upperBand[1], src)
+    del2 = src - nz(lowerBand[1], src)
+    volty = math.abs(del1) == math.abs(del2) ? 0 : math.max(math.abs(del1), math.abs(del2))
+    
+    // Incremental sum of Volty
+    vSum = 0.0
+    vSum := nz(vSum[1]) + 0.1 * (volty - nz(volty[10], volty))
+
+    // Jurik used 65
+    avgLen = 65
+    avgVolty = ta.sma(vSum, avgLen)
+    
+    // Relative price volatility
+    alen = (len - 1) / 2
+    len1 = math.max(math.log(math.sqrt(alen)) / math.log(2) + 2, 0)
+    pow1 = math.max(len1 - 2, 0.5)
+    
+    rVolty = avgVolty != 0 ? volty / avgVolty : 0
+    if (rVolty > math.pow(len1, 1 / pow1))
+        rVolty := math.pow(len1, 1 / pow1)
+    if rVolty < 1
+        rVolty := 1
+    
+    // Jurik Bands
+    pow2 = math.pow(rVolty, pow1)
+    len2 = math.sqrt(alen) * len1
+    bet  = len2/(len2 + 1)
+    kv   = math.pow(bet, math.sqrt(pow2))
+    
+    upperBand := del1 > 0 ? src : src - kv * del1
+    lowerBand := del2 < 0 ? src : src - kv * del2
+
+    pow2
+
+// @function Jurik MA
+// @param src Series to use
+// @param len Filtering length
+// @param phase JMA Phase
+// @returns Filtered series
+jma(float src, int len, int phase = 50) =>
+    jma = 0.0
+    phaseRatio = phase < -100 ? 0.5 : phase > 100 ? 2.5 : phase / 100 + 1.5
+    beta = 0.45 * (len - 1) / (0.45 * (len - 1) + 2)
+    power = jmapow(src, len)
+    alpha = math.pow(beta, power)
+    
+    // 1st stage - preliminary smoothing by adaptive EMA
+    ma1 = 0.0
+    ma1 := (1 - alpha) * src + alpha * nz(ma1[1])
+    
+    // 2nd stage - preliminary smoothing by Kalman filter
+    det0 = 0.0
+    det0 := (1 - beta) * (src - ma1) + beta * nz(det0[1])
+    ma2 = ma1 + phaseRatio * det0
+    
+    // 3rd stage - final smoothing by Jurik adaptive filter
+    det1 = 0.0
+    det1 := math.pow(1 - alpha, 2) * (ma2 - nz(jma[1])) + math.pow(alpha, 2) * nz(det1[1])
+
+    jma := nz(jma[1]) + det1
+    jma
+
+float out = jma(src, Length, Phase)
+
+plotColor = out > out[1] ? colorUp : colorDown
+plot(out, "JMA", color=plotColor, linewidth=2)
+
+// Plotting triangles
+upCondition = ta.crossover(out, out[1])
+downCondition = ta.crossunder(out, out[1])
+
+plotshape(series=upCondition, title="Up", location=location.belowbar, color=colorUp, style=shape.triangleup, size=size.tiny)
+plotshape(series=downCondition, title="Down", location=location.abovebar, color=colorDown, style=shape.triangledown, size=size.tiny)
+
+// Setting up alerts
+alertcondition(condition=upCondition, title="Up Alert", message="The value of 'out' is greater than its previous value.")
+alertcondition(condition=downCondition, title="Down Alert", message="The value of 'out' is less than its previous value.")

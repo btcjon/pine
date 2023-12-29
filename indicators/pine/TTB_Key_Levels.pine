@@ -1,0 +1,163 @@
+//@version=5
+indicator('TTB Key Levels', overlay=true)
+group           = 'SETTINGS'
+displaystyle    = input.string('Standard',  ' Display Style',      group = group, inline='onest', options=['Standard', 'Right', 'Both', 'Left'])
+linestyle       = input.string('Dotted',    ' Line Style ',        group = group, inline='twost', options=['Solid', 'Dashed', 'Dotted'])
+fontstyle       = input.string('Monospace', ' Font Type ',         group = group, inline='trest', options=['Monospace', 'Default'])
+labelpos        = input.string('Middle',    ' Label Pos ',         group = group, inline='     ', options=['Middle', 'Top'])
+bar_offset      = input.int   (30,          ' Offset  ',           group = group, inline='onest', minval=0, maxval=450, step = 5)
+threshold       = input.float (0.3,         ' Threshold %',        group = group, inline='twost', minval=0, step=0.05, tooltip='Threshold - the distance between the levels after which the labels merge.')
+index           = input.int   (0,           ' Index   ',           group = group, inline='trest', minval=0, step=1, tooltip='Index - Default 0 allows you to see current and past price levels. Changing to 1 will shift the current levels to the previous levels, and the previous levels to the previous levels, etc.')
+color_cD        = input.color (#2a89c9,   ' cD',                 group = group, inline='cols1')
+color_cW        = input.color (#b7d123,   ' cW',                 group = group, inline='cols1')
+color_cM        = input.color (#fd4ad9,   ' cM',                 group = group, inline='cols1')
+color_cQ        = input.color (#41f4e8,   ' cQ',                 group = group, inline='cols1')
+color_cY        = input.color (#d0f724,   ' cY',                 group = group, inline='cols1')
+color_pD        = input.color (#2a89c9,   ' pD',                 group = group, inline='cols2')
+color_pW        = input.color (#b7d123,   ' pW',                 group = group, inline='cols2')
+color_pM        = input.color (#8056b8,   ' pM',                 group = group, inline='cols2')
+color_pQ        = input.color (#fa4ef5,   ' pQ',                 group = group, inline='cols2')
+color_pY        = input.color (#d62e28,   ' pY',                 group = group, inline='cols2', tooltip="Prefix 'C' = Current/today. \nPrefix 'P' = Previous/yesterday. \nPrefix 'D' = Day. \nPrefix 'W' = Week. \nPrefix 'M' = Mounth. \nPrefix 'Q' = Quarterly. \nPrefix 'Y' = Year.'" )
+i_tG            = input.bool  (false,       ' Global Color Text',  group = group, inline='colsg')
+color_tG        = input.color (#ffffff,   ' ',                   group = group, inline='colsg')
+i_lG            = input.bool  (false,       ' Global Color Line',  group = group, inline='colsg')
+color_lG        = input.color (#ffffff,   ' ',                   group = group, inline='colsg')
+
+fontstyles      =  switch fontstyle
+    "Default"   => font.family_default
+    "Monospace" => font.family_monospace
+linestyles      =  switch linestyle
+    "Solid"     => line.style_solid
+    "Dashed"    => line.style_dashed
+    "Dotted"    => line.style_dotted
+displaystyles   =  switch displaystyle
+    "Standard"  => extend.none
+    "Right"     => extend.right
+    "Both"      => extend.both
+    "Left"      => extend.left
+
+getprice(TimeFrame, Index)=>    // Get Open, High, Low, Close, Time data
+    i  = Index
+    tf = TimeFrame
+    [O, H, L, C, T] = request.security(syminfo.tickerid, tf, [open[i], high[i], low[i], close[i], time[i]], lookahead=barmerge.lookahead_on)
+    [O, H, L, C, T]
+
+[cDopen, cDhigh, cDlow, cDclose, cDtime] = getprice('D',   0+index)   // Get Current  Day      Open, High, Low, Close, Time
+[cWopen, cWhigh, cWlow, cWclose, cWtime] = getprice('W',   0+index)   // Get Current  Weekly   Open, High, Low, Close, Time
+[cMopen, cMhigh, cMlow, cMclose, cMtime] = getprice('M',   0+index)   // Get Current  Mounth   Open, High, Low, Close, Time
+[cQopen, cQhigh, cQlow, cQclose, cQtime] = getprice('3M',  0+index)   // Get Current  Quarter  Open, High, Low, Close, Time
+[cYopen, cYhigh, cYlow, cYclose, cYtime] = getprice('12M', 0+index)   // Get Current  Year     Open, High, Low, Close, Time
+[pDopen, pDhigh, pDlow, pDclose, pDtime] = getprice('D',   1+index)   // Get Previous Day      Open, High, Low, Close, Time
+[pWopen, pWhigh, pWlow, pWclose, pWtime] = getprice('W',   1+index)   // Get Previous Weekly   Open, High, Low, Close, Time
+[pMopen, pMhigh, pMlow, pMclose, pMtime] = getprice('M',   1+index)   // Get Previous Mounth   Open, High, Low, Close, Time
+[pQopen, pQhigh, pQlow, pQclose, pQtime] = getprice('3M',  1+index)   // Get Previous Quarter  Open, High, Low, Close, Time
+[pYopen, pYhigh, pYlow, pYclose, pYtime] = getprice('12M', 1+index)   // Get Previous Year     Open, High, Low, Close, Time
+
+extend(bars) =>     // Extends the current time by the product of the time difference between elements and the number of bars.
+    timenow + (time - time[1]) * bars
+
+getlevel(time, level, txtcolor, linecolor, txtlabel)=>    // Get draws a line and a label on the chart 
+    if barstate.islast           // The following code doesn't need to be processed on every candle
+        xindex   = displaystyle == 'Standard' ? time : bar_index+bar_offset
+        xloc     = displaystyle == 'Standard' ? xloc.bar_time : xloc.bar_index
+        xid      = displaystyle == 'Standard' ? extend(bar_offset) : bar_index+bar_offset+1
+        lblpos   = labelpos     == 'Middle'   ? label.style_label_center : label.style_none
+        lines    = line.new (x1=xindex, x2=xid, y1=level, y2=level, xloc=xloc, style=linestyles, extend=displaystyles, color=linecolor)
+        labels   = label.new(x=xid, y=level, text=txtlabel, style=lblpos, xloc=xloc, text_font_family=fontstyles, textcolor=txtcolor, color = #ffffff00)
+        line.delete(lines[1])    // remove the previous line when new bar appears
+        label.delete(labels[1])  // remove the previous label when new bar appears
+        [lines, labels]
+
+// Get Inputs, Lines, Labels
+i_cDO = input(false, 'DO ', group = group, inline='D'), [cDayOpen , cDOlabel] = getlevel(cDtime, i_cDO ? cDopen  : na, i_tG ? color_tG : color_cD, i_lG ? color_lG : color_cD, 'DO'  )
+i_cDH = input(false, 'DH ', group = group, inline='D'), [cDayHigh , cDHlabel] = getlevel(cDtime, i_cDH ? cDhigh  : na, i_tG ? color_tG : color_cD, i_lG ? color_lG : color_cD, 'DH'  )
+i_cDL = input(false, 'DL ', group = group, inline='D'), [cDayLow  , cDLlabel] = getlevel(cDtime, i_cDL ? cDlow   : na, i_tG ? color_tG : color_cD, i_lG ? color_lG : color_cD, 'DL'  )
+i_pDO = input(false, 'pDO', group = group, inline='D'), [pDayOpen , pDOlabel] = getlevel(pDtime, i_pDO ? pDopen  : na, i_tG ? color_tG : color_pD, i_lG ? color_lG : color_pD, 'pDO' )
+i_pDH = input(false, 'pDH', group = group, inline='D'), [pDayHigh , pDHlabel] = getlevel(pDtime, i_pDH ? pDhigh  : na, i_tG ? color_tG : color_pD, i_lG ? color_lG : color_pD, 'pDH' )
+i_pDL = input(false, 'pDL', group = group, inline='D'), [pDayLow  , pDLlabel] = getlevel(pDtime, i_pDL ? pDlow   : na, i_tG ? color_tG : color_pD, i_lG ? color_lG : color_pD, 'pDL' )
+
+i_cWO = input(false, 'WO ', group = group, inline='W'), [cWekOpen , cWOlabel] = getlevel(cWtime, i_cWO ? cWopen  : na, i_tG ? color_tG : color_cW, i_lG ? color_lG : color_cW, 'WO'  )
+i_cWH = input(false, 'WH ', group = group, inline='W'), [cWekHigh , cWHlabel] = getlevel(cWtime, i_cWH ? cWhigh  : na, i_tG ? color_tG : color_cW, i_lG ? color_lG : color_cW, 'WH'  )
+i_cWL = input(false, 'WL ', group = group, inline='W'), [cWekLow  , cWLlabel] = getlevel(cWtime, i_cWL ? cWlow   : na, i_tG ? color_tG : color_cW, i_lG ? color_lG : color_cW, 'WL'  )
+i_pWO = input(false, 'pWO', group = group, inline='W'), [pWekOpen , pWOlabel] = getlevel(pWtime, i_pWO ? pWopen  : na, i_tG ? color_tG : color_pW, i_lG ? color_lG : color_pW, 'pWO' )
+i_pWH = input(false, 'pWH', group = group, inline='W'), [pWekHigh , pWHlabel] = getlevel(pWtime, i_pWH ? pWhigh  : na, i_tG ? color_tG : color_pW, i_lG ? color_lG : color_pW, 'pWH' )
+i_pWL = input(false, 'pWL', group = group, inline='W'), [pWekLow  , pWLlabel] = getlevel(pWtime, i_pWL ? pWlow   : na, i_tG ? color_tG : color_pW, i_lG ? color_lG : color_pW, 'pWL' )
+
+i_cMO = input(false, 'MO ', group = group, inline='M'), [cMonOpen , cMOlabel] = getlevel(cMtime, i_cMO ? cMopen  : na, i_tG ? color_tG : color_cM, i_lG ? color_lG : color_cM, 'MO'  )
+i_cMH = input(false, 'MH ', group = group, inline='M'), [cMonHigh , cMHlabel] = getlevel(cMtime, i_cMH ? cMhigh  : na, i_tG ? color_tG : color_cM, i_lG ? color_lG : color_cM, 'MH'  )
+i_cML = input(false, 'ML ', group = group, inline='M'), [cMonLow  , cMLlabel] = getlevel(cMtime, i_cML ? cMlow   : na, i_tG ? color_tG : color_cM, i_lG ? color_lG : color_cM, 'ML'  )
+i_pMO = input(false, 'pMO', group = group, inline='M'), [pMonOpen , pMOlabel] = getlevel(pMtime, i_pMO ? pMopen  : na, i_tG ? color_tG : color_pM, i_lG ? color_lG : color_pM, 'pMO' )
+i_pMH = input(true, 'pMH', group = group, inline='M'), [pMonHigh , pMHlabel] = getlevel(pMtime, i_pMH ? pMhigh  : na, i_tG ? color_tG : color_pM, i_lG ? color_lG : color_pM, 'pMH' )
+i_pML = input(true, 'pML', group = group, inline='M'), [pMonLow  , pMLlabel] = getlevel(pMtime, i_pML ? pMlow   : na, i_tG ? color_tG : color_pM, i_lG ? color_lG : color_pM, 'pML' )
+
+//add M mid-points
+MmidPoint25 = cMlow + (cMhigh - cMlow) * 0.25
+MmidPoint50 = cMlow + (cMhigh - cMlow) * 0.50
+MmidPoint75 = cMlow + (cMhigh - cMlow) * 0.75
+
+i_cM25 = input(false, 'M25 ', group = group, inline='M'), [cM25Line , cM25label] = getlevel(cMtime, i_cM25 ? MmidPoint25 : na, i_tG ? color_tG : color_cM, i_lG ? color_lG : color_cM, 'M25'  )
+i_cM50 = input(false, 'M50 ', group = group, inline='M'), [cM50Line , cM50label] = getlevel(cMtime, i_cM50 ? MmidPoint50 : na, i_tG ? color_tG : color_cM, i_lG ? color_lG : color_cM, 'M50'  )
+i_cM75 = input(false, 'M75 ', group = group, inline='M'), [cM75Line , cM75label] = getlevel(cMtime, i_cM75 ? MmidPoint75 : na, i_tG ? color_tG : color_cM, i_lG ? color_lG : color_cM, 'M75'  )
+
+i_cQO = input(false, 'QO ', group = group, inline='Q'), [cQonOpen , cQOlabel] = getlevel(cQtime, i_cQO ? cQopen  : na, i_tG ? color_tG : color_cQ, i_lG ? color_lG : color_cQ, 'QO'  )
+i_cQH = input(true, 'QH ', group = group, inline='Q'), [cQonHigh , cQHlabel] = getlevel(cQtime, i_cQH ? cQhigh  : na, i_tG ? color_tG : color_cQ, i_lG ? color_lG : color_cQ, 'QH'  )
+i_cQL = input(true, 'QL ', group = group, inline='Q'), [cQonLow  , cQLlabel] = getlevel(cQtime, i_cQL ? cQlow   : na, i_tG ? color_tG : color_cQ, i_lG ? color_lG : color_cQ, 'QL'  )
+i_pQO = input(false, 'pQO', group = group, inline='Q'), [pQonOpen , pQOlabel] = getlevel(pQtime, i_pQO ? pQopen  : na, i_tG ? color_tG : color_pQ, i_lG ? color_lG : color_pQ, 'pQO' )
+i_pQH = input(true, 'pQH', group = group, inline='Q'), [pQonHigh , pQHlabel] = getlevel(pQtime, i_pQH ? pQhigh  : na, i_tG ? color_tG : color_pQ, i_lG ? color_lG : color_pQ, 'pQH' )
+i_pQL = input(true, 'pQL', group = group, inline='Q'), [pQonLow  , pQLlabel] = getlevel(pQtime, i_pQL ? pQlow   : na, i_tG ? color_tG : color_pQ, i_lG ? color_lG : color_pQ, 'pQL' )
+
+//add Q mid-points
+QmidPoint25 = cQlow + (cQhigh - cQlow) * 0.25
+QmidPoint50 = cQlow + (cQhigh - cQlow) * 0.50
+QmidPoint75 = cQlow + (cQhigh - cQlow) * 0.75
+
+i_cQ25 = input(true, 'Q25 ', group = group, inline='Q'), [cQ25Line , cQ25label] = getlevel(cQtime, i_cQ25 ? QmidPoint25 : na, i_tG ? color_tG : color_cQ, i_lG ? color_lG : color_cQ, 'Q25'  )
+i_cQ50 = input(true, 'Q50 ', group = group, inline='Q'), [cQ50Line , cQ50label] = getlevel(cQtime, i_cQ50 ? QmidPoint50 : na, i_tG ? color_tG : color_cQ, i_lG ? color_lG : color_cQ, 'Q50'  )
+i_cQ75 = input(true, 'Q75 ', group = group, inline='Q'), [cQ75Line , cQ75label] = getlevel(cQtime, i_cQ75 ? QmidPoint75 : na, i_tG ? color_tG : color_cQ, i_lG ? color_lG : color_cQ, 'Q75'  )
+
+
+i_cYO = input(false, 'YO ', group = group, inline='Y'), [cYonOpen , cYOlabel] = getlevel(cYtime, i_cYO ? cYopen  : na, i_tG ? color_tG : color_cY, i_lG ? color_lG : color_cY, 'YO'  )
+i_cYH = input(true, 'YH ', group = group, inline='Y'), [cYonHigh , cYHlabel] = getlevel(cYtime, i_cYH ? cYhigh  : na, i_tG ? color_tG : color_cY, i_lG ? color_lG : color_cY, 'YH'  )
+i_cYL = input(true, 'YL ', group = group, inline='Y'), [cYonLow  , cYLlabel] = getlevel(cYtime, i_cYL ? cYlow   : na, i_tG ? color_tG : color_cY, i_lG ? color_lG : color_cY, 'YL'  )
+i_pYO = input(false, 'pYO', group = group, inline='Y'), [pYonOpen , pYOlabel] = getlevel(pYtime, i_pYO ? pYopen  : na, i_tG ? color_tG : color_pY, i_lG ? color_lG : color_pY, 'pYO' )
+i_pYH = input(false, 'pYH', group = group, inline='Y'), [pYonHigh , pYHlabel] = getlevel(pYtime, i_pYH ? pYhigh  : na, i_tG ? color_tG : color_pY, i_lG ? color_lG : color_pY, 'pYH' )
+i_pYL = input(false, 'pYL', group = group, inline='Y'), [pYonLow  , pYLlabel] = getlevel(pYtime, i_pYL ? pYlow   : na, i_tG ? color_tG : color_pY, i_lG ? color_lG : color_pY, 'pYL' )
+
+//add Y mid-points
+YmidPoint25 = cYlow + (cYhigh - cYlow) * 0.25
+YmidPoint50 = cYlow + (cYhigh - cYlow) * 0.50
+YmidPoint75 = cYlow + (cYhigh - cYlow) * 0.75
+
+i_cY25 = input(true, 'Y25 ', group = group, inline='Y'), [cY25Line , cY25label] = getlevel(cYtime, i_cY25 ? YmidPoint25 : na, i_tG ? color_tG : color_cY, i_lG ? color_lG : color_cY, 'Y25'  )
+i_cY50 = input(true, 'Y50 ', group = group, inline='Y'), [cY50Line , cY50label] = getlevel(cYtime, i_cY50 ? YmidPoint50 : na, i_tG ? color_tG : color_cY, i_lG ? color_lG : color_cY, 'Y50'  )
+i_cY75 = input(true, 'Y75 ', group = group, inline='Y'), [cY75Line , cY75label] = getlevel(cYtime, i_cY75 ? YmidPoint75 : na, i_tG ? color_tG : color_cY, i_lG ? color_lG : color_cY, 'Y75'  )
+
+// Сollecting labels into an array for normalization
+labels = array.from(cDOlabel,cDHlabel,cDLlabel,pDOlabel,pDHlabel,pDLlabel,cWOlabel,cWHlabel,cWLlabel,pWOlabel,pWHlabel,pWLlabel,cMOlabel,cMHlabel,cMLlabel,pMOlabel,pMHlabel,pMLlabel,cQOlabel,cQHlabel,cQLlabel,pQOlabel,pQHlabel,pQLlabel,cYOlabel,cYHlabel,cYLlabel,pYOlabel,pYHlabel,pYLlabel, cM25label, cM50label, cM75label, cQ25label, cQ50label, cQ75label, cY25label, cY50label, cY75label)
+
+// This loop merge items in arrays "labels" into a single label if their difference is less than a certain threshold, and updates the label text.
+for i = 0 to array.size(labels) - 2                                     // Loop through all the labels
+    txt = label.get_text(array.get(labels, i))                          // Get the text of the current label
+    price_i = label.get_y(array.get(labels, i))                         // Get the y coordinate of the current label
+    label_i = array.get(labels, i)                                      // Store the current label
+    for j = i + 1 to array.size(labels) - 1                             // Loop through the remaining labels
+        price_j = label.get_y(array.get(labels, j))                     // Get the y coordinate of the current label
+        if math.abs(price_i - price_j) < (threshold/100) * price_i      // Compare the prices
+            txt := txt + ' / ' + label.get_text(array.get(labels, j))   // Add the text of the second label
+            label.delete(array.get(labels, j))                          // Delete the second label
+    label.set_text(label_i, txt)                                        // Set the text of the current label
+
+repeat(str, num) => // Returns a string that is created by repeating the input str num times
+    res = ""
+    len = str.length(str)
+    if num > 0 and len * num <= 4096 
+        for r = 1 to num
+            res := res + str
+    res
+// Loop to change the position of the Label
+if labelpos == 'Middle'
+    for z = 0 to array.size(labels) - 1
+        label_z = array.get(labels, z)   // Get the label at position z
+        texts   = label.get_text(label_z) // Get the text of the label
+        spaces  = fontstyle=='Default' ? repeat(' ', math.ceil(str.length(texts))*2) : repeat(' ', math.ceil(str.length(texts)))   // Calculate the number of spaces needed
+        label.set_text(label_z, displaystyle=='Right'? texts + spaces + '     ' : spaces+'  ' + texts)   // Set the label text with the calculated spaces

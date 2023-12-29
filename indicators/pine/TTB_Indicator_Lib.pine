@@ -1,0 +1,58 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+// @description TODO: add library description here
+//@version=5
+library("TTB_Indicator_Lib")
+
+
+// MTF Supertrend TODO
+
+//VSLRT
+
+// Define and export the function for short term trend
+// This function takes in a length parameter 'len1' and returns the short term trend
+// It calculates the regression slope for Buy/Sell Volumes and returns them along with the short-term regression slope
+export _get_trend_short(len1) =>
+    src = close
+    // get short-term regression slope
+    slope_price = ta.linreg(src, len1, 0) - ta.linreg(src, len1, 1)
+    // get the size of top/bottom/body of the candle
+    tw = high - ta.max(open, close) 
+    bw = ta.min(open, close) - low 
+    body = ta.abs(close - open) 
+    //Calculate Buy/Sell Volume
+    _rate(cond) =>
+        ret = 0.5 * (tw + bw + (cond ? 2 * body : 0)) / (tw + bw + body) 
+        ret := na(ret) ? 0.5 : ret
+        ret
+    // Calculate Regression Slope for Buy/Sell Volumes
+    deltaup =  volume * _rate(open <= close) 
+    deltadown = volume * _rate(open > close)
+    slope_volume_up = ta.linreg(deltaup, len1, 0) - ta.linreg(deltaup, len1, 1)
+    slope_volume_down = ta.linreg(deltadown, len1, 0) - ta.linreg(deltadown, len1, 1)
+    [slope_price, slope_volume_up, slope_volume_down]
+
+// Define and export the function for long term trend
+// This function takes in a length parameter 'len2' and returns the long term trend
+// It calculates the regression slope for Buy/Sell Volumes and returns them along with the long-term regression slope
+export _get_trend_long(len2) =>
+    src = close
+    // get long-term regression slope
+    slope_price_lt = ta.linreg(src, len2, 0) - ta.linreg(src, len2, 1)
+    // get the size of top/bottom/body of the candle
+    tw = high - ta.max(open, close) 
+    bw = ta.min(open, close) - low 
+    body = ta.abs(close - open) 
+    //Calculate Buy/Sell Volume
+    _rate(cond) =>
+        ret = 0.5 * (tw + bw + (cond ? 2 * body : 0)) / (tw + bw + body) 
+        ret := na(ret) ? 0.5 : ret
+        ret
+    // Calculate Regression Slope for Buy/Sell Volumes
+    deltaup =  volume * _rate(open <= close) 
+    deltadown = volume * _rate(open > close)
+    slope_volume_up_lt = ta.linreg(deltaup, len2, 0) - ta.linreg(deltaup, len2, 1)
+    slope_volume_down_lt = ta.linreg(deltadown, len2, 0) - ta.linreg(deltadown, len2, 1)
+    [slope_price_lt, slope_volume_up_lt, slope_volume_down_lt]
+// END VSLRT
+

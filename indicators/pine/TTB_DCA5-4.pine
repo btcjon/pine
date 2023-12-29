@@ -1,0 +1,1006 @@
+// see indicators/TTB_DCA5-3.md for notes
+
+//@version=5
+
+strategy('TTB DCA 5.4L', overlay=true, pyramiding=999, calc_on_every_tick=false, default_qty_type=strategy.cash, default_qty_value=1, initial_capital=100000, commission_value=0.00, slippage=0)
+// Date Ranges
+show_table = input(true, title='Show table')
+text_size_switch = input(true, title='Small text in the table')
+ID = input(defval='6700960415957', title='ID')
+direction = input.string(defval='Long', title='Trading Direction', options=['All', 'Long', 'Short'])
+
+source_type = input.string('Close', 'Source', options=['Close', 'Open', 'High', 'Low', 'HL2', 'HLC3', 'OHLC4', 'Median Body', 'Weighted Close', 'Trend Biased', 'Trend Biased Extreme'])
+
+source_function(type) =>
+    if type == 'Close'
+        close
+    else if type == 'Open'
+        open
+    else if type == 'High'
+        high
+    else if type == 'Low'
+        low
+    else if type == 'HL2'
+        hl2
+    else if type == 'HL3'
+        hlc3
+    else if type == 'OHLC4'
+        ohlc4
+    else if type == 'Median Body'
+        (open + close) / 2
+    else if type == 'Weighted Close'
+        (high + low + 2 * close) / 4
+    else if type == 'Trend Biased'
+        close > open ? (high + close) / 2 : (low + close) / 2
+    else if type == 'Trend Biased Extreme'
+        close > open ? high : low
+
+truncate(number, decimals) =>
+    factor = math.pow(10, decimals)
+    int(number * factor) / factor
+
+var long = false
+var short = true
+
+if direction == 'All'
+    long := true
+    short := true
+    short
+else if direction == 'Long'
+    long := true
+    short := false
+    short
+else if direction == 'Short'
+    long := false
+    short := true
+    short
+
+// Strategy Inputs
+// Long Strategy Inputs
+group_long_inputs_inputs_title = "Long Inputs"
+price_deviation_input = input.float(0.06, title='Price deviation to open safety orders (%)', step=0.1, minval=0.0, group=group_long_inputs_inputs_title)
+price_deviation = price_deviation_input / 100
+take_profit_input = input.float(0.11, title='Target Take Profit (%)', step=0.1, minval=0.0, group=group_long_inputs_inputs_title)
+take_profit = take_profit_input / 100
+base_order_lots = input.float(0.1, title='base order (lots)', group=group_long_inputs_inputs_title)
+safe_order_lots = input.float(0.15, title='safe order (lots)', group=group_long_inputs_inputs_title)
+safe_order_volume_scale = input.float(1.4, step=0.1, title='Safety order volume scale', group=group_long_inputs_inputs_title)
+safe_order_volume_scale_factor = input.float(1.2, step=0.1, title='Safety order volume scale factor', group=group_long_inputs_inputs_title)
+safe_order_step_scale = input.float(1.2, step=0.1, title='Safety order step scale', group=group_long_inputs_inputs_title)
+safe_order_step_scale_factor = input.float(1.4, step=0.1, title='Safety order step scale factor',group=group_long_inputs_inputs_title)
+max_safe_order = input(6, title='max no. of safe orders', group=group_long_inputs_inputs_title)
+
+// Convert lots to units
+base_order_units = base_order_lots * 100000
+safe_order_units = safe_order_lots * 100000
+
+// Short Strategy Inputs
+group_short_inputs_inputs_title = "Short Inputs"
+price_S_deviation_input = input.float(0.06, title='Price deviation to open short safety orders (%)', step=0.1, minval=0.0, group=group_short_inputs_inputs_title)
+price_S_deviation = price_S_deviation_input / 100
+take_S_profit_input = input.float(0.11, title='Short Target Take Profit (%)', step=0.1, minval=0.0, group=group_short_inputs_inputs_title)
+take_S_profit = take_S_profit_input / 100
+base_S_order_lots = input.float(0.1, title='base sell order (lots)', group=group_short_inputs_inputs_title)
+safe_S_order_lots = input.float(0.15, title='safe sell order (lots)', group=group_short_inputs_inputs_title)
+safe_S_order_volume_scale = input.float(1.4, step=0.1, title='Safety sell order volume scale', group=group_short_inputs_inputs_title)
+safe_S_order_volume_scale_factor = input.float(1.2, step=0.1, title='Safety sell order volume scale factor', group=group_short_inputs_inputs_title)
+safe_S_order_step_scale = input.float(1.2, step=0.1, title='Safety sell order step scale', group=group_short_inputs_inputs_title)
+safe_S_order_step_scale_factor = input.float(1.4, step=0.1, title='Safety sell order step scale factor', group=group_short_inputs_inputs_title)
+max_S_safe_order = input(6, title='max no. of sell safe orders', group=group_short_inputs_inputs_title)
+
+// Convert lots to units
+base_S_order_units = base_S_order_lots * 100000
+safe_S_order_units = safe_S_order_lots * 100000
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// ADXVMA
+// Inputs for the three ADXVMA plots
+adxvma_period1 = input.int(5, title="Period 1", minval=1)
+threshold1 = input.float(0.00005, title="Trend Change Threshold 1") 
+
+adxvma_period2 = input.int(5, title="Period 2", minval=1)
+threshold2 = input.float(0.00005, title="Trend Change Threshold 2")
+
+
+ADXVMA_plots = input(false, title="Show ADXVMA plots")
+
+
+
+// Function to compute ADXVMA
+adxvma_function(period, threshold) =>
+    var float up = na
+    var float down = na
+    var float ups = na
+    var float downs = na
+    var float index = na
+    var float adxvma = na
+    var int trend = na
+    k = 1.0 / period
+    volatility = ta.atr(200)
+    currentUp = math.max(close - close[1], 0)
+    currentDown = math.max(close[1] - close, 0)
+    up := (1 - k) * nz(up[1]) + k * currentUp
+    down := (1 - k) * nz(down[1]) + k * currentDown
+    sum = up + down
+    fractionUp = sum > 0 ? up / sum : 0
+    fractionDown = sum > 0 ? down / sum : 0
+    ups := (1 - k) * nz(ups[1]) + k * fractionUp
+    downs := (1 - k) * nz(downs[1]) + k * fractionDown
+    normDiff = math.abs(ups - downs)
+    normSum = ups + downs
+    normFraction = normSum > 0.0 ? normDiff / normSum : 0
+    index := (1 - k) * nz(index[1]) + k * normFraction
+    epsilon = 0.1 * nz(volatility[1])
+    hhp = ta.highest(index, period)[1]
+    llp = ta.lowest(index, period)[1]
+    hhv = math.max(index, hhp)
+    llv = math.min(index, llp)
+    vIndex = hhv - llv > 0.0 ? (index - llv) / (hhv - llv) : 0
+    adxvma := (1 - k * vIndex) * nz(adxvma[1]) + k * vIndex * close
+    trend := math.abs(adxvma - nz(adxvma[1])) < threshold * nz(adxvma[1]) ? 0 : (nz(trend[1]) > -1 and adxvma > nz(adxvma[1])) ? 1 : (nz(trend[1]) < 1 and adxvma < nz(adxvma[1])) ? -1 : trend[1]
+    lcolor = trend == 0 ? color.yellow : trend == 1 ? color.green : color.red
+    [adxvma, lcolor, trend]
+
+[adxvma1, lcolor1, trend1] = adxvma_function(adxvma_period1, threshold1)
+[adxvma2, lcolor2, trend2] = adxvma_function(adxvma_period2, threshold2)
+
+// Plot the three ADXVMA lines
+plot(ADXVMA_plots ? adxvma1 : na, color=color.new(lcolor1, 0), linewidth=1, title="ADXVMA 1")
+plot(ADXVMA_plots ? adxvma2 : na, color=color.new(lcolor2, 0), linewidth=1, title="ADXVMA 2")
+
+
+ADXVMAbuy = trend1 == 1 and trend2 == 1
+ADXVMAsell = trend1 == -1 and trend2 == -1
+
+// END ADXVMA
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// TTB FDIAJFTMAPZ
+
+// Define your timeframes as user inputs
+group_fdi_inputs_inputs_title = "FDI Inputs"
+timeframe1 = input.timeframe("60", "Timeframe 1", group=group_fdi_inputs_inputs_title)
+timeframe2 = input.timeframe("120", "Timeframe 2", group=group_fdi_inputs_inputs_title)
+timeframe3 = input.timeframe("180", "Timeframe 3", group=group_fdi_inputs_inputs_title)
+showPlotsInput = input.bool(false, "Show Plots", group=group_fdi_inputs_inputs_title)
+     
+import loxx/loxxjuriktools/1
+import loxx/loxxexpandedsourcetypes/4
+
+greencolor = #2DD204  
+redcolor = #D2042D 
+
+fdip(float src, int per, int speedin)=>
+    float fmax = ta.highest(src, per)
+    float fmin = ta.lowest(src,  per)
+    float length = 0
+    float diff = 0
+    for i = 1 to per - 1
+        diff := (nz(src[i]) - fmin) / (fmax - fmin)
+        if i > 0
+            length += math.sqrt( math.pow(nz(diff[i]) - nz(diff[i + 1]), 2) + (1 / math.pow(per, 2)))
+    float fdi = 1 + (math.log(length) + math.log(2)) / math.log(2 * per)
+    float traildim = 1 / (2 - fdi)
+    float alpha = traildim / 2
+    int speed = math.round(speedin * alpha)
+    speed
+    
+calcrng(per)=>
+    float lsum = (per + 1) * low
+    float hsum = (per + 1) * high
+    float sumw = (per + 1)
+    int k = per
+    for j = 1 to per
+        lsum += k * nz(low[j])
+        hsum += k * nz(high[j])
+        sumw += k
+        k -= 1
+    float out = (hsum / sumw - lsum / sumw)
+    out
+
+fdi_src = input.source(hl2, "Source", group= "Source Settings")
+per = input.int(30, "Fractal Period Ingest", group = "Basic Settings")
+speed = input.int(20, "Speed", group = "Basic Settings")
+
+smthper = input.int(25, "Jurik Smoothing Period", group = "Jurik Settings")
+smthphs = input.float(0., "Jurik Smoothing Phase", group = "Jurik Settings")
+
+rngper = input.int(5, "Range Period", group = "Price Zone Settings")
+fdi_dev = input.float(1.8, "Deviation", group = "Price Zone Settings")
+colorbars = input.bool(true, "Color bars?", group = "UI Options")
+showsignals = input.bool(true, "Show signals?", group = "UI Options")
+
+fdiper = fdip(fdi_src, per, speed)
+
+sum = (fdiper + 1) * fdi_src
+sumw = (fdiper + 1)
+k = fdiper
+
+for j = 1 to fdiper 
+    sum += k * nz(fdi_src[j])
+    sumw += k
+    k -= 1
+
+tma = loxxjuriktools.jurik_filt(sum / sumw, smthper, smthphs)
+sig = tma[1]
+
+rng = calcrng(rngper)
+
+uplvl = tma + fdi_dev * rng
+dnlvl = tma - fdi_dev * rng
+
+colorout = tma > sig ? greencolor : redcolor
+
+
+
+barcolor(colorbars ? colorout : na)
+
+goLong = ta.crossover(tma, sig) 
+goShort = ta.crossunder(tma, sig)  
+
+plot(showPlotsInput ? tma : na, "TMA", color = colorout, linewidth = 3)
+plot(showPlotsInput ? uplvl : na, "Upper Channel", color = color.gray, linewidth = 1)
+plot(showPlotsInput ? dnlvl : na, "Lower Channel", color = color.gray, linewidth = 1)
+plotshape(showPlotsInput and goLong and showsignals, title = "Long", color = color.yellow, textcolor = color.yellow, text = "L", style = shape.triangleup, location = location.belowbar, size = size.tiny)
+plotshape(showPlotsInput and goShort and showsignals, title = "Short", color = color.fuchsia, textcolor = color.fuchsia, text = "S", style = shape.triangledown, location = location.abovebar, size = size.tiny)
+
+// Request tma and sig for each timeframe
+tma1 = request.security(syminfo.tickerid, timeframe1, tma)
+sig1 = request.security(syminfo.tickerid, timeframe1, sig)
+
+tma2 = request.security(syminfo.tickerid, timeframe2, tma)
+sig2 = request.security(syminfo.tickerid, timeframe2, sig)
+
+tma3 = request.security(syminfo.tickerid, timeframe3, tma)
+sig3 = request.security(syminfo.tickerid, timeframe3, sig)
+
+// Calculate colorout for each timeframe
+colorout1 = tma1 > sig1 ? greencolor : redcolor
+colorout2 = tma2 > sig2 ? greencolor : redcolor
+colorout3 = tma3 > sig3 ? greencolor : redcolor
+
+// Define your conditions
+fdi_buyConditionBackground = colorout1 == greencolor and colorout2 == greencolor and colorout3 == greencolor
+fdi_sellConditionBackground = colorout1 == redcolor and colorout2 == redcolor and colorout3 == redcolor
+
+// Shade the background when all conditions are true
+bgcolor(fdi_buyConditionBackground ? color.new(color.rgb(76, 175, 79), 93) : na)
+bgcolor(fdi_sellConditionBackground ? color.new(color.rgb(255, 82, 82), 93) : na)
+
+// Define your buy and sell conditions
+fdi_buyCondition = colorout1 == greencolor and colorout2 == greencolor and colorout3 == greencolor
+fdi_sellCondition = colorout1 == redcolor and colorout2 == redcolor and colorout3 == redcolor
+
+//End TTB FDIAJFTMAPZ
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// half trend
+//half trend inputs
+group_half_trend_inputs_title = "Half Trend Inputs"
+amplitude = input(title='Amplitude', defval=10, group=group_half_trend_inputs_title)
+channelDeviation = input(title='Channel Deviation', defval=7, group=group_half_trend_inputs_title)
+showArrows = input(title='Show Arrows', defval=false, group=group_half_trend_inputs_title)
+showChannels = input(title='Show Channels', defval=false, group=group_half_trend_inputs_title)
+
+var int trend = 0
+var int nextTrend = 0
+var float maxLowPrice = nz(low[1], low)
+var float minHighPrice = nz(high[1], high)
+
+var float up = 0.0
+var float down = 0.0
+float atrHigh = 0.0
+float atrLow = 0.0
+float arrowUp = na
+float arrowDown = na
+
+atr2 = ta.atr(100) / 2
+dev = channelDeviation * atr2
+
+highPrice = high[math.abs(ta.highestbars(amplitude))]
+lowPrice = low[math.abs(ta.lowestbars(amplitude))]
+highma = ta.sma(high, amplitude)
+lowma = ta.sma(low, amplitude)
+
+if nextTrend == 1
+    maxLowPrice := math.max(lowPrice, maxLowPrice)
+
+    if highma < maxLowPrice and close < nz(low[1], low)
+        trend := 1
+        nextTrend := 0
+        minHighPrice := highPrice
+        minHighPrice
+else
+    minHighPrice := math.min(highPrice, minHighPrice)
+
+    if lowma > minHighPrice and close > nz(high[1], high)
+        trend := 0
+        nextTrend := 1
+        maxLowPrice := lowPrice
+        maxLowPrice
+
+if trend == 0
+    if not na(trend[1]) and trend[1] != 0
+        up := na(down[1]) ? down : down[1]
+        arrowUp := up - atr2
+        arrowUp
+    else
+        up := na(up[1]) ? maxLowPrice : math.max(maxLowPrice, up[1])
+        up
+    atrHigh := up + dev
+    atrLow := up - dev
+    atrLow
+else
+    if not na(trend[1]) and trend[1] != 1
+        down := na(up[1]) ? up : up[1]
+        arrowDown := down + atr2
+        arrowDown
+    else
+        down := na(down[1]) ? minHighPrice : math.min(minHighPrice, down[1])
+        down
+    atrHigh := down + dev
+    atrLow := down - dev
+    atrLow
+
+ht = trend == 0 ? up : down
+
+var color buyColor = color.blue
+var color sellColor = color.red
+
+htColor = trend == 0 ? buyColor : sellColor
+//htPlot = plot(ht, title='HalfTrend', linewidth=2, color=htColor)
+
+// atrHighPlot = plot(showChannels ? atrHigh : na, title='ATR High', style=plot.style_circles, color=color.new(sellColor, 0))
+// atrLowPlot = plot(showChannels ? atrLow : na, title='ATR Low', style=plot.style_circles, color=color.new(buyColor, 0))
+
+// fill(htPlot, atrHighPlot, title='ATR High Ribbon', color=color.new(sellColor, 90))
+// fill(htPlot, atrLowPlot, title='ATR Low Ribbon', color=color.new(buyColor, 90))
+
+HTbuySignal = not na(arrowUp) and trend == 0 and trend[1] == 1
+HTsellSignal = not na(arrowDown) and trend == 1 and trend[1] == 0
+
+plotshape(showArrows and HTbuySignal, title='Arrow Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(buyColor, 0))
+plotshape(showArrows and HTsellSignal, title='Arrow Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(sellColor, 0))
+//end halftrend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// supertrend
+
+ST1_atrPeriod = input.int(10,    "ATR Length", minval = 1)
+ST1_factor =    input.float(5, "Factor",     minval = 0.01, step = 0.01)
+ST1_show_ST_plots = input.bool(false, "Show Supertrend Plots")
+
+[ST1_supertrend, ST1_ST_direction] = ta.supertrend(ST1_factor, ST1_atrPeriod)
+
+ST1_supertrend := barstate.isfirst ? na : ST1_supertrend
+//bodyMiddle = plot(show_ST_plots and barstate.isfirst ? na : (open + close) / 2, "Body Middle", display = display.none)
+//upTrend =    plot(show_ST_plots and ST_direction < 0 ? supertrend : na, "Up Trend",   color = color.green, style = plot.style_linebr)
+//downTrend =  plot(show_ST_plots and ST_direction < 0 ? na : supertrend, "Down Trend", color = color.red,   style = plot.style_linebr)
+
+fillcolorUp = ST1_show_ST_plots ? color.new(color.green, 90) : na
+fillcolorDown = ST1_show_ST_plots ? color.new(color.red, 90) : na
+
+//fill(bodyMiddle, upTrend, fillcolorUp, fillgaps = false)
+//fill(bodyMiddle, downTrend, fillcolorDown, fillgaps = false)
+
+STbuy = close > ST1_supertrend
+STsell = close < ST1_supertrend
+
+// end supertrend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// supertrend2
+
+ST2_atrPeriod = input.int(100,    "ATR Length", minval = 1)
+ST2_factor =    input.float(8, "Factor",     minval = 0.01, step = 0.01)
+ST2_show_ST_plots = input.bool(false, "Show Supertrend Plots")
+
+[ST2_supertrend, ST2_ST_direction] = ta.supertrend(ST2_factor, ST2_atrPeriod)
+
+ST2_supertrend := barstate.isfirst ? na : ST2_supertrend
+//bodyMiddle = plot(show_ST_plots and barstate.isfirst ? na : (open + close) / 2, "Body Middle", display = display.none)
+//upTrend =    plot(show_ST_plots and ST_direction < 0 ? supertrend : na, "Up Trend",   color = color.green, style = plot.style_linebr)
+//downTrend =  plot(show_ST_plots and ST_direction < 0 ? na : supertrend, "Down Trend", color = color.red,   style = plot.style_linebr)
+
+ST2_fillcolorUp = ST2_show_ST_plots ? color.new(color.green, 90) : na
+ST2_fillcolorDown = ST2_show_ST_plots ? color.new(color.red, 90) : na
+
+//fill(bodyMiddle, upTrend, fillcolorUp, fillgaps = false)
+//fill(bodyMiddle, downTrend, fillcolorDown, fillgaps = false)
+
+ST2buy = close > ST2_supertrend
+ST2sell = close < ST2_supertrend
+
+// end supertrend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// volume fight
+
+volf_ma = input.int(70, 'Search_range', minval=1, group = "Vol Fight", tooltip='The range of estimation of the predominance of bullish or bearish volume (quantity bars). The smaller the TF, the higher the range value should be used to filter out false signals.')
+volf_delta = input.float(10, 'Smoothing_for_flat,%', step=0.5, minval=0, group = "Vol Fight", tooltip='Smoothing to reduce false signals and highlight the flat zone. If you set the percentage to zero, the flat zones will not be highlighted, but there will be much more false signals, since the indicator becomes very sensitive when the smoothing percentage decreases.')
+volf_bgshow = input.bool(false, 'Show background zones', group = "Vol Fight", tooltip='Show the color background of the current trading zone.')
+volf_all_signal_show = input.bool(false, 'Show each setup in zone', group = "Vol Fight", tooltip='Show and use signals every time in trading zone.')
+show_volf_BuyPlot = input.bool(false, "Show Buy Plot?", group = "Vol Fight")
+show_volf_SellPlot = input.bool(false, "Show Sell Plot?", group = "Vol Fight")
+
+/////   CALCULATION
+volf_bull_vol = open < close ? volume : volume * (high - open) / (high - low)  //determine the share of bullish volume
+volf_bear_vol = open > close ? volume : volume * (open - low) / (high - low)  //determine the share of bearish volume
+volf_avg_bull_vol = ta.vwma(volf_bull_vol, volf_ma)  //determine vwma
+volf_avg_bear_vol = ta.vwma(volf_bear_vol, volf_ma)
+volf_diff_vol = ta.sma(volf_avg_bull_vol / volume - 1 - (volf_avg_bear_vol / volume - 1), volf_ma)  //normalize and smooth the values
+volf_vol_flat = math.abs(volf_avg_bull_vol + volf_avg_bear_vol) / 2  //determine average value for calculation flat-filter
+
+/////   SIGNALS
+volf_up = int(na)  //variables
+volf_up := nz(volf_up[1])
+volf_dn = int(na)
+volf_dn := nz(volf_dn[1])
+volf_bull = volf_avg_bull_vol > volf_avg_bear_vol and volf_vol_flat / volf_avg_bull_vol < 1 - volf_delta / 100  //determine up zones
+volf_bear = volf_avg_bull_vol < volf_avg_bear_vol and volf_vol_flat / volf_avg_bear_vol < 1 - volf_delta / 100  //determine dn zones
+if volf_bull
+    volf_up += 1
+    volf_dn := 0
+    volf_dn
+if volf_bear
+    volf_dn += 1
+    volf_up := 0
+    volf_up
+if not volf_bull and not volf_bear and volf_all_signal_show
+    volf_up := 0
+    volf_dn := 0
+    volf_dn
+
+volume_fight_buy = volf_avg_bull_vol > volf_avg_bear_vol and volf_vol_flat / volf_avg_bull_vol < 1 - volf_delta / 100
+volume_fight_sell = volf_avg_bull_vol < volf_avg_bear_vol and volf_vol_flat / volf_avg_bear_vol < 1 - volf_delta / 100
+
+plotshape(show_volf_BuyPlot and volume_fight_buy, title = "Buy Signal", color = color.green, style = shape.triangleup, location = location.belowbar)
+plotshape(show_volf_SellPlot and volume_fight_sell, title = "Sell Signal", color = color.red, style = shape.triangledown, location = location.abovebar)
+
+
+
+// end volume fight
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// squeeze index
+sq_conv   = input(50, 'Convergence Factor')
+
+sq_length = input(50)
+
+sq_src = input(close)
+
+var sq_max = 0.
+var sq_min = 0.
+
+sq_max := nz(math.max(sq_src, sq_max - (sq_max - sq_src) / sq_conv), sq_src)
+sq_min := nz(math.min(sq_src, sq_min + (sq_src - sq_min) / sq_conv), sq_src)
+sq_diff = math.log(sq_max - sq_min)
+
+sq_psi = -50 * ta.correlation(sq_diff, bar_index, sq_length) + 50
+
+sq_on = sq_psi > 85
+sq_off = sq_psi < 85
+
+
+
+// end squeeze index
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// rmi trend
+
+
+// ** ---> Inputs ------------- {
+var bool rmi_positive               = false
+var bool rmi_negative               = false
+string rmi_RSI_group                = "RMI Settings"
+string rmi_mom_group                = "Range Vales"
+string rmi_visual                   = "Visuals" 
+int rmi_Length                      = input(14,"RMI Length ",inline = "RMI",group = rmi_RSI_group)
+int rmi_pmom                        = input(66," Positive above",inline = "rsi1",group = rmi_RSI_group )
+int rmi_nmom                        = input(30,"Negative below",inline = "rsi1",group = rmi_RSI_group )
+bool rmi_filleshow = true
+color rmi_bull = color.new(color.rgb(0, 188, 212), 70) // 70% transparency
+color rmi_bear = color.new(color.rgb(255, 82, 82), 70) // 70% transparency
+float rmi_BarRange                  = high - low
+
+rmi_up = ta.rma(math.max(ta.change(close), 0), rmi_Length)
+rmi_down = ta.rma(-math.min(ta.change(close), 0), rmi_Length)
+rmi_rsi = rmi_down == 0 ? 100 : rmi_up == 0 ? 0 : 100 - (100 / (1 + rmi_up / rmi_down))
+rmi_mf = ta.mfi(hlc3, rmi_Length)
+rmi_rsi_mfi = math.avg(rmi_rsi,rmi_mf)
+
+
+
+//------------------- }
+
+bool rmi_p_mom                          = rmi_rsi_mfi[1] < rmi_pmom and
+      rmi_rsi_mfi > rmi_pmom and
+      rmi_rsi_mfi > rmi_nmom and
+       ta.change(ta.ema(close,5)) > 0
+
+bool rmi_n_mom                          = rmi_rsi_mfi < rmi_nmom and
+      ta.change(ta.ema(close,5)) < 0
+// //  ---> Momentums ------------- {
+
+if rmi_p_mom
+    rmi_positive:= true
+    rmi_negative:= false
+
+if rmi_n_mom
+    rmi_positive:= false
+    rmi_negative:= true     
+
+
+
+//
+method rmi_Band(int len)=>
+    math.min (ta.atr (len) * 0.3, close * (0.3/100)) [20] /2 * 8 
+
+
+rmi_Band = rmi_Band(30) 
+
+
+method rmi_rangeMA(float Range,Prd)=>
+    weight = Range / math.sum(Range, Prd)
+    sum = math.sum(close * weight, Prd)
+    tw= math.sum(weight, Prd)
+    sum / tw
+
+
+// Calculate the RWMA
+rmi_rwma = rmi_rangeMA(rmi_BarRange,20)
+
+// Plotting the RWMA.
+colour = rmi_positive ? rmi_bull : rmi_bear
+rmi_RWMA = rmi_positive ? rmi_rwma - rmi_Band : rmi_negative ? rmi_rwma + rmi_Band : na
+alpha = color.new(color.black, 100)
+
+center = plot(rmi_filleshow ? rmi_RWMA : na, "RRTH", colour, editable = true)
+plot(rmi_filleshow ? rmi_RWMA : na, "RRTH", color.new(colour, 70), 2, editable = true)
+plot(rmi_filleshow ? rmi_RWMA : na, "RRTH", color.new(colour, 80), 3, editable = true)
+plot(rmi_filleshow ? rmi_RWMA : na, "RRTH", color.new(colour, 90), 4, editable = true)
+
+rmi_max = rmi_RWMA + rmi_Band
+rmi_min = rmi_RWMA - rmi_Band
+
+top = plot(rmi_filleshow ? rmi_max: na, "RRTH", alpha)
+bottom = plot(rmi_filleshow ? rmi_min: na, "RRTH", alpha)
+fill(top, center, top_value =  rmi_max, bottom_value = rmi_RWMA, bottom_color = color.new(colour, 75), top_color = alpha, editable = true)
+fill(center, bottom, top_value =  rmi_RWMA, bottom_value = rmi_min, bottom_color = alpha, top_color = color.new(colour, 75), editable = true)
+Barcol = rmi_positive ? color.green:color.red
+
+if rmi_negative and not rmi_negative[1]
+    label.new(bar_index,rmi_max+(rmi_Band/2),"",color = color.red,size=size.small)
+if rmi_positive and not rmi_positive[1]
+    label.new(bar_index,rmi_min-(rmi_Band/2),"",color = color.green,size=size.small,style= label.style_label_up)
+
+plotcandle(open, high, low, close,color = Barcol,wickcolor = Barcol,bordercolor  = Barcol)
+barcolor(color = Barcol)
+
+
+// SPOT Trading Alerts
+//alertcondition(positive and not positive[1],"BUY")
+//alertcondition(negative and not negative[1],"SELL")
+
+rmi_buy = rmi_positive and not rmi_positive[1]
+rmi_sell = rmi_negative and not rmi_negative[1]
+
+// end rmi trend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+
+
+// Triggers
+long_trigger = input(title='Long trigger value', defval=100)
+short_trigger = input(title='Short trigger value', defval=-100)
+trigger = input(title='Enter trigger', defval=close)
+
+// stat time frame inputs
+group_stat_time_frame_inputs_title = "Stat Time Frame Inputs"
+from_month = input.int(defval=5, title='From Month', minval=1, maxval=12, group=group_stat_time_frame_inputs_title)
+from_day = input.int(defval=1, title='From Day', minval=1, maxval=31, group=group_stat_time_frame_inputs_title)
+from_year = input(defval=2021, title='From Year', group=group_stat_time_frame_inputs_title)
+to_month = input.int(defval=12, title='To Month', minval=1, maxval=12, group=group_stat_time_frame_inputs_title)
+to_day = input.int(defval=1, title='To Day', minval=1, maxval=31, group=group_stat_time_frame_inputs_title)
+to_year = input(defval=2024, title='To Year', group=group_stat_time_frame_inputs_title)
+start = timestamp(from_year, from_month, from_day, 00, 00)  // backtest start window
+finish = timestamp(to_year, to_month, to_day, 23, 59)  // backtest finish window
+window = time >= start and time <= finish ? true : false  // create function "within window of time"
+
+// Strat Logic
+var current_so = 0
+var current_S_so = 0
+var initial_order = 0.0
+var initial_S_order = 0.0
+var original_ttp_value = 0.0
+var quantity = 0.0
+var entry_price = 0.0
+var firstBarTime = 0.0
+var maxDiffDays = 0.0
+var soCount = 0
+var SO1 = 0
+var SO2 = 0
+var SO3 = 0
+var SO4 = 0
+var SO5 = 0
+var SO6 = 0
+var SO7 = 0
+var noSO = 0
+var initial_price = 0.0
+var initial_S_price = 0.0
+var price_drop = 0.0
+var price_pump = 0.0
+var max_drop = 0.0
+var max_pump = 0.0
+var pump_date = 0
+var pump_month = 0
+var drop_date = 0
+var drop_month = 0
+var longest_trade_day = 0
+var longest_trade_month = 0
+var take_profit_level = 0.0
+var take_S_profit_level = 0.0
+var tp_plot = 0.0
+var tp_S_plot = 0.0
+var threshold = 0.0
+var S_threshold = 0.0
+timeDiff = time - firstBarTime
+maxDev = 0.0
+maxSDev = 0.0
+closedTrades = 0
+var tradeCount = 0
+var i = 0
+var avg_price = 0.0
+var total_funds_in_trade = 0.0
+var total_qty_in_trade = 0.0
+var capital = 100.0
+
+// Turn that time difference into days
+diffDays = timeDiff / 86400000
+
+// Calculate our TP levels
+take_profit_level := avg_price * (1 + take_profit)
+take_S_profit_level := avg_price * (1 - take_S_profit)
+
+
+// First Position
+for j = 0 to max_safe_order - 1 by 1
+    maxDev := int((maxDev + price_deviation * 100 * math.pow(safe_order_step_scale, j)) * 100) / 100
+    maxDev
+for k = 0 to max_S_safe_order - 1 by 1
+    maxSDev := int((maxSDev + price_S_deviation * 100 * math.pow(safe_S_order_step_scale, k)) * 100) / 100
+    maxSDev
+
+if math.abs(strategy.position_size) != 0 and current_so[1] == 0
+    strategy.close_all()
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+//Long and short entry
+//Strategy Inputs
+groupTitleLongEntry = "Long Entry"
+ADXVMAbuyInput = input.bool(false, "ADXVMA buy", group = groupTitleLongEntry)
+fdi_buyConditionInput = input.bool(true, "FDI buy condition", group = groupTitleLongEntry)
+HTbuySignalInput = input.bool(true, "HT buy signal", group = groupTitleLongEntry)
+STbuyInput = input.bool(true, "Supertrend buy signal", group = groupTitleLongEntry)
+volumeFightBuyInput = input.bool(true, "Volume Fight Buy", group = groupTitleLongEntry)
+sq_offBuyInput = input.bool(true, "Squeeze Index Off Buy", group = groupTitleLongEntry)
+rmi_buyInput = input.bool(true, "RMI Buy", group = groupTitleLongEntry)
+
+groupTitleShortEntry = "Short Entry"
+ADXVMAsellInput = input.bool(false, "ADXVMA sell", group = groupTitleShortEntry)
+fdi_sellConditionInput = input.bool(true, "FDI sell condition", group = groupTitleShortEntry)
+HTsellSignalInput = input.bool(true, "HT sell signal", group = groupTitleShortEntry)
+STsellInput = input.bool(true, "Supertrend sell signal", group = groupTitleShortEntry)
+volumeFightSellInput = input.bool(true, "Volume Fight Sell", group = groupTitleShortEntry)
+sq_offSellInput = input.bool(true, "Squeeze Index Off Sell", group = groupTitleShortEntry)
+rmi_sellInput = input.bool(true, "RMI Sell", group = groupTitleShortEntry)
+
+if (long and strategy.position_size == 0 and source_function(source_type) > 0 and window and not(hour(time) == 0 and minute(time) < 59) and (ADXVMAbuyInput ? ADXVMAbuy : true) and (fdi_buyConditionInput ? fdi_buyCondition : true) and (HTbuySignalInput ? HTbuySignal : true) and (STbuyInput ? STbuy : true) and (volumeFightBuyInput ? volume_fight_buy : true) and (sq_offBuyInput ? sq_off : true) and (rmi_buyInput ? rmi_buy : true))
+    _string_long = ID + ',long,' + syminfo.ticker + '.PRO,risk=' + str.tostring(base_order_lots)
+    strategy.entry('Long @' + str.tostring(source_function(source_type)), strategy.long, qty=base_order_units, alert_message=_string_long)
+    initial_order := source_function(source_type)
+    current_so := 1
+    initial_price := close
+    price_drop := close
+    original_ttp_value := 0
+    firstBarTime := time
+    tradeCount += 1
+    avg_price := close
+    total_funds_in_trade := avg_price * base_order_units
+    total_qty_in_trade := base_order_units
+    total_qty_in_trade
+
+else if (short and strategy.position_size == 0 and source_function(source_type) > 0 and window and not(hour(time) == 0 and minute(time) < 59) and (ADXVMAsellInput ? ADXVMAsell : true) and (fdi_sellConditionInput ? fdi_sellCondition : true) and (HTsellSignalInput ? HTsellSignal : true) and (STsellInput ? STsell : true) and (volumeFightSellInput ? volume_fight_sell : true) and (sq_offSellInput ? sq_off : true) and (rmi_sellInput ? rmi_sell : true))
+    _string_short = ID + ',short,' + syminfo.ticker + '.PRO,risk=' + str.tostring(base_S_order_lots)
+    strategy.entry('Short @' + str.tostring(source_function(source_type)), strategy.short, qty=base_order_units, alert_message=_string_short)
+    initial_S_order := source_function(source_type)
+    current_so := 1
+    firstBarTime := time
+    tradeCount += 1
+    initial_S_price := close
+    price_pump := close
+    avg_price := close
+    total_funds_in_trade := avg_price * base_order_units
+    total_qty_in_trade := base_order_units
+    total_qty_in_trade
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+//makes the red and green line plot pretty at the position opening
+if strategy.position_size == 0
+    threshold := low[1]
+    S_threshold := high[1]
+    S_threshold
+
+//Safety order levels
+
+//Long
+if strategy.position_size > 0 and i == 0
+    if current_so == 1
+        threshold := initial_order - initial_order * price_deviation
+    else if safe_order_step_scale == 1.0
+        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * (current_so - 1)
+    else
+        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale * safe_order_step_scale_factor, current_so - 1) - 1) / (safe_order_step_scale - 1))
+
+//Short
+else if strategy.position_size < 0 and i == 0
+    if current_so == 1
+        S_threshold := initial_S_order * (1 + price_S_deviation)
+    else if safe_S_order_step_scale == 1.0
+        S_threshold := initial_S_order * (1 + price_S_deviation * (current_so - 1))
+    else
+        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale * safe_order_step_scale_factor, current_so - 1) - 1) / (safe_S_order_step_scale - 1))
+
+
+//for Min SO bars
+var int last_so_bar = na
+
+
+groupTitleLongSO = "Long Safety Orders"
+volumeFightBuySOInput = input.bool(true, "Volume Fight Buy SO", group = groupTitleLongSO)
+sq_offBuySOInput = input.bool(true, "Squeeze Index Off Buy SO", group = groupTitleLongSO)
+STbuySOInput = input.bool(true, "Supertrend buy signal SO", group = groupTitleLongSO)
+ST2buySOInput = input.bool(true, "Supertrend2 buy signal SO", group = groupTitleLongSO)
+HTbuySignalSOInput = input.bool(true, "HT buy signal SO", group = groupTitleLongSO)
+MinSOLongBars = input.int(80, "Minimum Bars Between Safety Orders", minval=1, group = groupTitleLongSO)
+
+groupTitleShortSO = "Short Safety Orders"
+volumeFightSellSOInput = input.bool(true, "Volume Fight Sell SO", group = groupTitleShortSO)
+sq_offSellSOInput = input.bool(true, "Squeeze Index Off Sell SO", group = groupTitleShortSO)
+STsellSOInput = input.bool(true, "Supertrend sell signal SO", group = groupTitleShortSO)
+ST2sellSOInput = input.bool(true, "Supertrend2 sell signal SO", group = groupTitleShortSO)
+HTsellSignalSOInput = input.bool(true, "HT sell signal SO", group = groupTitleShortSO)
+MinSOShortBars = input.int(80, "Minimum Bars Between Safety Orders", minval=1, group = groupTitleShortSO)
+
+// Average Down
+if current_so > 0 and i == 0 and strategy.position_size > 0 and low <= threshold and current_so <= max_safe_order and not(hour(time) == 0 and minute(time) < 59) and (volumeFightBuySOInput ? volume_fight_buy : true) and (na(last_so_bar) or bar_index > last_so_bar + MinSOLongBars) and (sq_offBuySOInput ? sq_off : true) and (STbuySOInput ? STbuy : true) and (ST2buySOInput ? ST2buy : true) and (HTbuySignalSOInput ? HTbuySignal : true)
+    last_so_bar := bar_index
+    so_percent = ((threshold - initial_order) / initial_order) * 100
+    order_qty = safe_order_units * safe_order_volume_scale * safe_order_step_scale_factor * (current_so - 1)
+    order_qty_lots = order_qty / 100000
+    //_string_long_so = ID + ',long,' + syminfo.ticker + '.PRO,risk=' + str.tostring(order_qty_lots)
+    _string_long_so = str.replace(ID, " ", "") + ',long,' + str.replace(syminfo.ticker, " ", "") + '.PRO,risk=' + str.tostring(order_qty_lots, format.mintick)
+    strategy.entry('SO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)) + ' (' + str.tostring(so_percent) + '%)', strategy.long, qty=safe_order_units * math.pow(safe_order_volume_scale * safe_order_step_scale_factor, current_so - 1), alert_message=_string_long_so)
+    
+    // Estimate the execution price as the low of the current bar
+    exec_price = low
+    total_funds_in_trade += exec_price * safe_order_units * math.pow(safe_order_volume_scale * safe_order_step_scale_factor, current_so - 1)
+    total_qty_in_trade += safe_order_units * math.pow(safe_order_volume_scale * safe_order_step_scale_factor, current_so - 1)
+    avg_price := total_funds_in_trade / total_qty_in_trade
+    take_profit_level := avg_price * (1 + take_profit)
+    take_S_profit_level := avg_price * (1 - take_S_profit)
+    
+    current_so += 1
+    tradeCount += 1
+ 
+
+// Short Average Up
+if current_so > 0 and i == 0 and strategy.position_size < 0 and high >= S_threshold and current_so <= max_S_safe_order and not(hour(time) == 0 and minute(time) < 59) and (volumeFightSellSOInput ? volume_fight_sell : true) and (na(last_so_bar) or bar_index > last_so_bar + MinSOShortBars) and (sq_offSellSOInput ? sq_off : true) and (STsellSOInput ? STsell : true) and (ST2sellSOInput ? ST2sell : true) and (HTsellSignalSOInput ? HTsellSignal : true)
+    last_so_bar := bar_index
+    so_percent = ((S_threshold - initial_S_order) / initial_S_order) * 100
+    order_qty = safe_S_order_units * safe_S_order_volume_scale * safe_S_order_step_scale_factor * (current_so - 1)
+    order_qty_lots = order_qty / 100000
+    //_string_short_so = ID + ',short,' + syminfo.ticker + '.PRO,risk=' + str.tostring(order_qty_lots)
+    _string_short_so = str.replace(ID, " ", "") + ',short,' + str.replace(syminfo.ticker, " ", "") + '.PRO,risk=' + str.tostring(order_qty_lots, format.mintick)
+    strategy.entry('SSO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)) + ' (' + str.tostring(so_percent) + '%)', strategy.short, qty=safe_S_order_units * math.pow(safe_S_order_volume_scale * safe_S_order_step_scale_factor, current_so - 1), alert_message=_string_short_so)
+    
+    // Estimate the execution price as the high of the current bar
+    exec_price = high
+    total_funds_in_trade += exec_price * safe_S_order_units * math.pow(safe_S_order_volume_scale * safe_S_order_step_scale_factor, current_so - 1)
+    total_qty_in_trade += safe_S_order_units * math.pow(safe_S_order_volume_scale * safe_S_order_step_scale_factor, current_so - 1)
+    avg_price := total_funds_in_trade / total_qty_in_trade
+    take_profit_level := avg_price * (1 + take_profit)
+    take_S_profit_level := avg_price * (1 - take_S_profit)
+    
+    current_so += 1
+    tradeCount += 1   
+
+// Take Profit! 
+if i == 1 and not(hour(time) == 0 and minute(time) < 59)
+    _string_close = ID + ',closelong,' + syminfo.ticker
+    strategy.close_all(alert_message = _string_close)
+    i := 0
+    i
+
+// Take Profit! 
+if i == 1 and not(hour(time) == 0 and minute(time) < 59)
+    //_string_close = ID + ',closelong,' + syminfo.ticker + '.PRO'
+    _string_close = str.replace(ID, " ", "") + ',closelong,' + str.replace(syminfo.ticker, " ", "") + '.PRO'
+    strategy.close_all(alert_message = _string_close)
+    i := 0
+    i
+
+if avg_price * (1 + take_profit) <= high and strategy.position_size > 0 and not(hour(time) == 0 and minute(time) < 59)
+    _string_take_profit = str.replace(ID, " ", "") + ',closelong,' + str.replace(syminfo.ticker, " ", "") + '.PRO'
+    strategy.close_all(comment='Close @' + str.tostring(source_function(source_type)), alert_message = _string_take_profit)
+    soCount := current_so
+    current_so := 0
+    original_ttp_value := 0
+    price_drop := na
+    initial_price := na
+    diffDays := time - firstBarTime
+    if diffDays > maxDiffDays
+        maxDiffDays := diffDays
+        longest_trade_day := dayofmonth
+        longest_trade_month := month
+        longest_trade_month
+    i := 1
+    initial_order := 0.0
+    avg_price := na
+    capital *= (1 + total_qty_in_trade * take_profit / 100)
+    capital
+
+// Take Short Profit! 
+if take_S_profit_level >= low and strategy.position_size < 0 and not(hour(time) == 0 and minute(time) < 59)
+    //_string_take_short_profit = str.replace(ID, " ", "") + ',closeshort,' + str.replace(syminfo.ticker, " ", "") + '.PRO'
+    _string_take_short_profit = str.replace(ID, " ", "") + ',closeshort,' + str.replace(syminfo.ticker, " ", "") + '.PRO'
+    strategy.close_all(comment='Close Short @' + str.tostring(source_function(source_type)), alert_message = _string_take_short_profit)
+    soCount := current_so
+    current_so := 0
+    price_pump := na
+    initial_S_price := na
+    diffDays := time - firstBarTime
+    if diffDays > maxDiffDays
+        maxDiffDays := diffDays
+        maxDiffDays
+    initial_S_order := 0.0
+    avg_price := na
+    capital *= (1 + total_qty_in_trade * take_S_profit / 100)
+    capital
+
+//Table building and calculations
+if strategy.position_size == 0
+    if soCount == 1
+        noSO += 1
+        noSO
+    else if soCount == 2
+        SO1 += 1
+        SO1
+    else if soCount == 3
+        SO2 += 1
+        SO2
+    else if soCount == 4
+        SO3 += 1
+        SO3
+    else if soCount == 5
+        SO4 += 1
+        SO4
+    else if soCount == 6
+        SO5 += 1
+        SO5
+    else if soCount == 7
+        SO6 += 1
+        SO6
+    else if soCount == 8
+        SO7 += 1
+        SO7
+    soCount := 0
+    soCount
+closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
+
+if low < price_drop and window and strategy.position_size > 0
+    price_drop := low
+    if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
+        max_drop := int((1 - price_drop / initial_price) * 10000) / 100
+        drop_date := dayofmonth(time)
+        drop_month := month(time)
+        drop_month
+bgcolor(max_drop[1] < max_drop ? color.new(color.rgb(0, 187, 212), 95) : na)
+
+if high > price_pump and window and strategy.position_size < 0
+    price_pump := high
+    if max_pump < int((price_pump / initial_S_price - 1) * 10000) / 100
+        max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
+        pump_date := dayofmonth(time)
+        pump_month := month(time)
+        pump_month
+bgcolor(max_pump[1] < max_pump ? color.new(color.rgb(155, 39, 176), 70) : na)
+
+if take_profit_level > 0 and strategy.position_size > 0
+    tp_plot := take_profit_level
+    tp_plot
+else
+    tp_plot := close
+    tp_plot
+
+if take_S_profit_level > 0 and strategy.position_size < 0
+    tp_S_plot := take_S_profit_level
+    tp_S_plot
+else
+    tp_S_plot := close
+    tp_S_plot
+
+//Plotting the levels
+p1 = plot(tp_plot, color=strategy.position_size <= 0 ? na : #00ff00)
+p2 = plot(avg_price, color=strategy.position_size == 0 ? na : color.white)
+p3 = plot(threshold, color=strategy.position_size <= 0 ? na : #ff0000)
+p4 = plot(tp_S_plot, color=strategy.position_size >= 0 ? na : #00ff00)
+p5 = plot(S_threshold, color=strategy.position_size >= 0 ? na : #ff0000)
+fill(p1, p2, color=strategy.position_size > 0 ? color.new(color.rgb(19, 231, 221), 90) : na)
+fill(p2, p3, color=strategy.position_size > 0 ? color.new(color.rgb(255, 82, 82), 95) : na)
+fill(p4, p2, color=strategy.position_size < 0 ? color.new(color.rgb(19, 231, 221), 90) : na)
+fill(p5, p2, color=strategy.position_size < 0 ? color.new(color.rgb(255, 82, 82), 95) : na)
+profit_color = strategy.openprofit < 0 ? color.red : color.green
+
+text_size = text_size_switch ? size.small : size.normal
+
+// plot(strategy.opentrades)
+// plot(current_so, color = color.yellow)
+// plot(abs(strategy.position_size), color = color.red)
+// plot(quantity, color=color.purple)
+
+//Table formatting
+if show_table
+    var Table = table.new(position.bottom_right, columns=2, rows=20, border_width=1, bgcolor=color.black, border_color=color.gray)
+    table.cell(table_id=Table, column=0, row=0, text_color=color.gray, text_size=text_size, text='Net Profit')
+    table.cell(table_id=Table, column=1, row=0, text=str.tostring(int((capital - 100) * 100) / 100) + '%', text_size=text_size, text_color=color.lime)
+    table.cell(table_id=Table, column=0, row=1, text_color=color.gray, text_size=text_size, text='Max Deviation ')
+    table.cell(table_id=Table, column=1, row=1, text=str.tostring(maxDev) + '%', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=0, row=2, text_color=color.gray, text_size=text_size, text='Max Short Dev ')
+    table.cell(table_id=Table, column=1, row=2, text=str.tostring(maxSDev) + '%', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=0, row=3, text='No SO ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=3, text=str.tostring(noSO), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=4, text='SO 1 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=4, text=str.tostring(SO1), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=5, text='SO 2 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=5, text=str.tostring(SO2), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=6, text='SO 3 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=6, text=str.tostring(SO3), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=7, text='SO 4 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=7, text=str.tostring(SO4), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=8, text='SO 5 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=8, text=str.tostring(SO5), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=9, text='SO 6 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=9, text=str.tostring(SO6), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=10, text='SO 7 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=10, text=str.tostring(SO7), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=11, text='Closed/Open trades', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=11, text=str.tostring(strategy.closedtrades) + '/' + str.tostring(strategy.opentrades), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=12, text='Current Deal Time', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=12, text=strategy.position_size != 0 ? str.tostring(int((time - firstBarTime) / 8640000) / 10) + ' days' : '0', text_size=text_size, text_color=color.green)
+    table.cell(table_id=Table, column=0, row=13, text='Unrealized position', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=13, text=str.tostring(int(strategy.openprofit / (strategy.initial_capital + strategy.netprofit) * 10000) / 100) + ' %', text_size=text_size, text_color=profit_color)
+    table.cell(table_id=Table, column=0, row=14, text='Longest deal:', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=1, row=14, text=str.tostring(int(maxDiffDays / 8640000) / 10) + ' days, ' + str.tostring(longest_trade_day) + '/' + str.tostring(longest_trade_month), text_size=text_size, text_color=color.red)
+    table.cell(table_id=Table, column=0, row=15, text='Max price drop:', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=1, row=15, text=str.tostring(max_drop) + ' %, ' + str.tostring(drop_date) + '/' + str.tostring(drop_month), text_size=text_size, text_color=color.red)
+    table.cell(table_id=Table, column=0, row=16, text='Max price pump:', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=1, row=16, text=str.tostring(max_pump) + ' %, ' + str.tostring(pump_date) + '/' + str.tostring(pump_month), text_size=text_size, text_color=color.red)

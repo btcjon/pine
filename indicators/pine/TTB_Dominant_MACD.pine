@@ -1,0 +1,75 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//
+//======================
+//Adapted FROM http://www.davenewberg.com/Trading/TS_Code/Ehlers_Indicators/Cycle_Period_Calculator.html
+//======================
+
+//@version=5
+indicator('TTB Dominant MACD', max_bars_back=4000)
+
+
+import thetradingbot/ttbcolors/1 as TTBColors
+
+
+Price = hl2
+alpha = input.float(0.07, minval=0, maxval=1)
+Smooth = (Price + 2 * Price[1] + 2 * Price[2] + Price[3]) / 6
+Cycle = 0.
+InstPeriod = 0.
+Q1 = 0.
+DeltaPhase = 0.
+I1 = 0.
+DominantPeriod = 0.
+
+Cycle := (1 - .5 * alpha) * (1 - .5 * alpha) * (Smooth - 2 * Smooth[1] + Smooth[2]) + 2 * (1 - alpha) * nz(Cycle[1]) - (1 - alpha) * (1 - alpha) * nz(Cycle[2])
+Q1 := (.0962 * Cycle + .5769 * Cycle[2] - .5769 * Cycle[4] - .0962 * Cycle[6]) * (.5 + .08 * nz(InstPeriod[1]))
+I1 := Cycle[3]
+DeltaPhase := Q1 != 0 and Q1[1] != 0 ? (I1 / Q1 - I1[1] / Q1[1]) / (1 + I1 * I1[1] / (Q1 * Q1[1])) : na
+DeltaPhase := DeltaPhase < 0.1 ? 0.1 : DeltaPhase
+DeltaPhase := DeltaPhase > 1.1 ? 1.1 : DeltaPhase
+MedianDelta = ta.percentile_nearest_rank(DeltaPhase, 5, 50)
+DC = MedianDelta == 0 ? 15 : 6.28318 / MedianDelta + 0.5
+InstPeriod := .33 * DC + .67 * nz(InstPeriod[1])
+DominantPeriod := .15 * InstPeriod + .85 * nz(DominantPeriod[1])
+
+
+fastper = int(DominantPeriod)
+slowper = int(2 * DominantPeriod + 1)
+
+
+pine_ema(src, length) =>
+    _alpha = 2 / (length + 1)
+    sum = 0.0
+    sum := na(sum[1]) ? ta.sma(src, length) : _alpha * src + (1 - _alpha) * nz(sum[1])
+    sum
+
+
+src = input(hl2, 'macd source')
+slow_ema = pine_ema(src, nz(slowper, 26))
+fast_ema = pine_ema(src, nz(fastper, 12))
+
+MACD = fast_ema - slow_ema
+signal_MACD = ta.ema(MACD, 9)
+
+// Plot colors
+col_grow_above = TTBColors.colorUp()
+col_grow_below = TTBColors.colorDown()
+col_fall_above = TTBColors.colorUplight()
+col_fall_below = TTBColors.colorDownlight()
+col_macd = TTBColors.colorUpPlus()
+col_signal = TTBColors.colorDownPlus()
+
+hist = MACD - signal_MACD
+
+plot(MACD, color=TTBColors.colorUp(), title="MACD")
+plot(signal_MACD, color=TTBColors.colorDown(), title="Signal MACD")
+plot(hist, title='Histogram', style=plot.style_columns, color=hist >= 0 ? hist[1] < hist ? col_grow_above : col_fall_above : hist[1] < hist ? col_grow_below : col_fall_below, transp=0)
+
+show_adaptive_cycle_periods = input(false)
+plot(show_adaptive_cycle_periods ? fastper : na, color=TTBColors.colorUpPlustrans(), title="Fast Period")
+plot(show_adaptive_cycle_periods ? slowper : na, color=TTBColors.colorDownPlustrans(), title="Slow Period")
+
+show_moving_average_independently = input(false)
+plot(show_moving_average_independently ? slow_ema : na, color=TTBColors.colorUptrans(), title="Slow EMA")
+plot(show_moving_average_independently ? fast_ema : na, color=TTBColors.colorDowntrans(), title="Fast EMA")
+

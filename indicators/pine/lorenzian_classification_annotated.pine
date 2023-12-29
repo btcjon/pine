@@ -1,0 +1,1070 @@
+# This requires a closer look to determine the most suitable Python translation.
+indicator('Machine Learning: Lorentzian Classification', 'Lorentzian Classification', true, precision=4, max_labels_count=500)
+# This requires a closer look to determine the most suitable Python translation.
+type Settings
+# This requires a closer look to determine the most suitable Python translation.
+float source
+# This requires a closer look to determine the most suitable Python translation.
+int neighborsCount
+# This requires a closer look to determine the most suitable Python translation.
+int maxBarsBack
+# This requires a closer look to determine the most suitable Python translation.
+int featureCount
+# This requires a closer look to determine the most suitable Python translation.
+int colorCompression
+# This requires a closer look to determine the most suitable Python translation.
+bool showExits
+# This requires a closer look to determine the most suitable Python translation.
+bool useDynamicExits
+# This requires a closer look to determine the most suitable Python translation.
+type Label
+# This requires a closer look to determine the most suitable Python translation.
+int long
+# This requires a closer look to determine the most suitable Python translation.
+int short
+# This requires a closer look to determine the most suitable Python translation.
+int neutral
+# This requires a closer look to determine the most suitable Python translation.
+type FeatureArrays
+# This requires a closer look to determine the most suitable Python translation.
+array<float> f1
+# This requires a closer look to determine the most suitable Python translation.
+array<float> f2
+# This requires a closer look to determine the most suitable Python translation.
+array<float> f3
+# This requires a closer look to determine the most suitable Python translation.
+array<float> f4
+# This requires a closer look to determine the most suitable Python translation.
+array<float> f5
+# This requires a closer look to determine the most suitable Python translation.
+type FeatureSeries
+# This requires a closer look to determine the most suitable Python translation.
+float f1
+# This requires a closer look to determine the most suitable Python translation.
+float f2
+# This requires a closer look to determine the most suitable Python translation.
+float f3
+# This requires a closer look to determine the most suitable Python translation.
+float f4
+# This requires a closer look to determine the most suitable Python translation.
+float f5
+# This requires a closer look to determine the most suitable Python translation.
+type MLModel
+# This requires a closer look to determine the most suitable Python translation.
+int firstBarIndex
+# This requires a closer look to determine the most suitable Python translation.
+array<int> trainingLabels
+# This requires a closer look to determine the most suitable Python translation.
+int loopSize
+# This requires a closer look to determine the most suitable Python translation.
+float lastDistance
+# This requires a closer look to determine the most suitable Python translation.
+array<float> distancesArray
+# This requires a closer look to determine the most suitable Python translation.
+array<int> predictionsArray
+# This requires a closer look to determine the most suitable Python translation.
+int prediction
+# This requires a closer look to determine the most suitable Python translation.
+type FilterSettings
+# This requires a closer look to determine the most suitable Python translation.
+bool useVolatilityFilter
+# This requires a closer look to determine the most suitable Python translation.
+bool useRegimeFilter
+# This requires a closer look to determine the most suitable Python translation.
+bool useAdxFilter
+# This requires a closer look to determine the most suitable Python translation.
+float regimeThreshold
+# This requires a closer look to determine the most suitable Python translation.
+int adxThreshold
+# This requires a closer look to determine the most suitable Python translation.
+type Filter
+# This requires a closer look to determine the most suitable Python translation.
+bool volatility
+# This requires a closer look to determine the most suitable Python translation.
+bool regime
+# This requires a closer look to determine the most suitable Python translation.
+bool adx
+# This requires a closer look to determine the most suitable Python translation.
+series_from(feature_string, _close, _high, _low, _hlc3, f_paramA, f_paramB) =>
+# This requires a closer look to determine the most suitable Python translation.
+switch feature_string
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+"RSI" => ml.n_rsi(_close, f_paramA, f_paramB)
+# This requires a closer look to determine the most suitable Python translation.
+"WT" => ml.n_wt(_hlc3, f_paramA, f_paramB)
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+"CCI" => ml.n_cci(_close, f_paramA, f_paramB)
+# This requires a closer look to determine the most suitable Python translation.
+"ADX" => ml.n_adx(_high, _low, _close, f_paramA)
+# This requires a closer look to determine the most suitable Python translation.
+get_lorentzian_distance(int i, int featureCount, FeatureSeries featureSeries, FeatureArrays featureArrays) =>
+# This requires a closer look to determine the most suitable Python translation.
+switch featureCount
+# This requires a closer look to determine the most suitable Python translation.
+5 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f5 - array.get(featureArrays.f5, i)))
+# This requires a closer look to determine the most suitable Python translation.
+4 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f4 - array.get(featureArrays.f4, i)))
+# This requires a closer look to determine the most suitable Python translation.
+3 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f3 - array.get(featureArrays.f3, i)))
+# This requires a closer look to determine the most suitable Python translation.
+2 => math.log(1+math.abs(featureSeries.f1 - array.get(featureArrays.f1, i))) +
+# This requires a closer look to determine the most suitable Python translation.
+math.log(1+math.abs(featureSeries.f2 - array.get(featureArrays.f2, i)))
+# This requires a closer look to determine the most suitable Python translation.
+Settings settings =
+# This requires a closer look to determine the most suitable Python translation.
+Settings.new(
+# This requires a closer look to determine the most suitable Python translation.
+input.source(title='Source', defval=close, group="General Settings", tooltip="Source of the input data"),
+# This requires a closer look to determine the most suitable Python translation.
+input.int(title='Neighbors Count', defval=8, group="General Settings", minval=1, maxval=100, step=1, tooltip="Number of neighbors to consider"),
+# This requires a closer look to determine the most suitable Python translation.
+input.int(title="Max Bars Back", defval=2000, group="General Settings"),
+# This requires a closer look to determine the most suitable Python translation.
+input.int(title="Feature Count", defval=5, group="Feature Engineering", minval=2, maxval=5, tooltip="Number of features to use for ML predictions."),
+# This requires a closer look to determine the most suitable Python translation.
+input.int(title="Color Compression", defval=1, group="General Settings", minval=1, maxval=10, tooltip="Compression factor for adjusting the intensity of the color scale."),
+# This requires a closer look to determine the most suitable Python translation.
+input.bool(title="Show Default Exits", defval=false, group="General Settings", tooltip="Default exits occur exactly 4 bars after an entry signal. This corresponds to the predefined length of a trade during the model's training process.", inline="exits"),
+# This requires a closer look to determine the most suitable Python translation.
+input.bool(title="Use Dynamic Exits", defval=false, group="General Settings", tooltip="Dynamic exits attempt to let profits ride by dynamically adjusting the exit threshold based on kernel regression logic.", inline="exits")
+# This requires a closer look to determine the most suitable Python translation.
+)
+# This requires a closer look to determine the most suitable Python translation.
+showTradeStats = input.bool(true, 'Show Trade Stats', tooltip='Displays the trade stats for a given configuration. Useful for optimizing the settings in the Feature Engineering section. This should NOT replace backtesting and should be used for calibration purposes only. Early Signal Flips represent instances where the model changes signals before 4 bars elapses; high values can indicate choppy (ranging) market conditions.', group="General Settings")
+# This requires a closer look to determine the most suitable Python translation.
+useWorstCase = input.bool(false, "Use Worst Case Estimates", tooltip="Whether to use the worst case scenario for backtesting. This option can be useful for creating a conservative estimate that is based on close prices only, thus avoiding the effects of intrabar repainting. This option assumes that the user does not enter when the signal first appears and instead waits for the bar to close as confirmation. On larger timeframes, this can mean entering after a large move has already occurred. Leaving this option disabled is generally better for those that use this indicator as a source of confluence and prefer estimates that demonstrate discretionary mid-bar entries. Leaving this option enabled may be more consistent with traditional backtesting results.", group="General Settings")
+# This requires a closer look to determine the most suitable Python translation.
+FilterSettings filterSettings =
+# This requires a closer look to determine the most suitable Python translation.
+FilterSettings.new(
+# This requires a closer look to determine the most suitable Python translation.
+input.bool(title="Use Volatility Filter", defval=true, tooltip="Whether to use the volatility filter.", group="Filters"),
+# This requires a closer look to determine the most suitable Python translation.
+input.bool(title="Use Regime Filter", defval=true, group="Filters", inline="regime"),
+# This requires a closer look to determine the most suitable Python translation.
+input.bool(title="Use ADX Filter", defval=false, group="Filters", inline="adx"),
+# This requires a closer look to determine the most suitable Python translation.
+input.float(title="Threshold", defval=-0.1, minval=-10, maxval=10, step=0.1, tooltip="Whether to use the trend detection filter. Threshold for detecting Trending/Ranging markets.", group="Filters", inline="regime"),
+# This requires a closer look to determine the most suitable Python translation.
+input.int(title="Threshold", defval=20, minval=0, maxval=100, step=1, tooltip="Whether to use the ADX filter. Threshold for detecting Trending/Ranging markets.", group="Filters", inline="adx")
+# This requires a closer look to determine the most suitable Python translation.
+)
+# This requires a closer look to determine the most suitable Python translation.
+Filter filter =
+# This requires a closer look to determine the most suitable Python translation.
+Filter.new(
+# This requires a closer look to determine the most suitable Python translation.
+ml.filter_volatility(1, 10, filterSettings.useVolatilityFilter),
+# This requires a closer look to determine the most suitable Python translation.
+ml.regime_filter(ohlc4, filterSettings.regimeThreshold, filterSettings.useRegimeFilter),
+# This requires a closer look to determine the most suitable Python translation.
+ml.filter_adx(settings.source, 14, filterSettings.adxThreshold, filterSettings.useAdxFilter)
+# This requires a closer look to determine the most suitable Python translation.
+)
+# This requires a closer look to determine the most suitable Python translation.
+f1_string = input.string(title="Feature 1", options=["RSI", "WT", "CCI", "ADX"], defval="RSI", inline = "01", tooltip="The first feature to use for ML predictions.", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f1_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 1.", defval=14, inline = "02", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f1_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 2 (if applicable).", defval=1, inline = "02", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f2_string = input.string(title="Feature 2", options=["RSI", "WT", "CCI", "ADX"], defval="WT", inline = "03", tooltip="The second feature to use for ML predictions.", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f2_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 2.", defval=10, inline = "04", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f2_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 2 (if applicable).", defval=11, inline = "04", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f3_string = input.string(title="Feature 3", options=["RSI", "WT", "CCI", "ADX"], defval="CCI", inline = "05", tooltip="The third feature to use for ML predictions.", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f3_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 3.", defval=20, inline = "06", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f3_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 3 (if applicable).", defval=1, inline = "06", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f4_string = input.string(title="Feature 4", options=["RSI", "WT", "CCI", "ADX"], defval="ADX", inline = "07", tooltip="The fourth feature to use for ML predictions.", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f4_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 4.", defval=20, inline = "08", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f4_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 4 (if applicable).", defval=2, inline = "08", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f5_string = input.string(title="Feature 5", options=["RSI", "WT", "CCI", "ADX"], defval="RSI", inline = "09", tooltip="The fifth feature to use for ML predictions.", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f5_paramA = input.int(title="Parameter A", tooltip="The primary parameter of feature 5.", defval=9, inline = "10", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+f5_paramB = input.int(title="Parameter B", tooltip="The secondary parameter of feature 5 (if applicable).", defval=1, inline = "10", group="Feature Engineering")
+# This requires a closer look to determine the most suitable Python translation.
+featureSeries =
+# This requires a closer look to determine the most suitable Python translation.
+FeatureSeries.new(
+# This requires a closer look to determine the most suitable Python translation.
+series_from(f1_string, close, high, low, hlc3, f1_paramA, f1_paramB), // f1
+# This requires a closer look to determine the most suitable Python translation.
+series_from(f2_string, close, high, low, hlc3, f2_paramA, f2_paramB), // f2
+# This requires a closer look to determine the most suitable Python translation.
+series_from(f3_string, close, high, low, hlc3, f3_paramA, f3_paramB), // f3
+# This requires a closer look to determine the most suitable Python translation.
+series_from(f4_string, close, high, low, hlc3, f4_paramA, f4_paramB), // f4
+# This requires a closer look to determine the most suitable Python translation.
+series_from(f5_string, close, high, low, hlc3, f5_paramA, f5_paramB)  // f5
+# This requires a closer look to determine the most suitable Python translation.
+)
+# This requires a closer look to determine the most suitable Python translation.
+var f1Array = array.new_float()
+# This requires a closer look to determine the most suitable Python translation.
+var f2Array = array.new_float()
+# This requires a closer look to determine the most suitable Python translation.
+var f3Array = array.new_float()
+# This requires a closer look to determine the most suitable Python translation.
+var f4Array = array.new_float()
+# This requires a closer look to determine the most suitable Python translation.
+var f5Array = array.new_float()
+# This requires a closer look to determine the most suitable Python translation.
+array.push(f1Array, featureSeries.f1)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(f2Array, featureSeries.f2)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(f3Array, featureSeries.f3)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(f4Array, featureSeries.f4)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(f5Array, featureSeries.f5)
+# This requires a closer look to determine the most suitable Python translation.
+featureArrays =
+# This requires a closer look to determine the most suitable Python translation.
+FeatureArrays.new(
+# This requires a closer look to determine the most suitable Python translation.
+f1Array, // f1
+# This requires a closer look to determine the most suitable Python translation.
+f2Array, // f2
+# This requires a closer look to determine the most suitable Python translation.
+f3Array, // f3
+# This requires a closer look to determine the most suitable Python translation.
+f4Array, // f4
+# This requires a closer look to determine the most suitable Python translation.
+f5Array  // f5
+# This requires a closer look to determine the most suitable Python translation.
+)
+# This requires a closer look to determine the most suitable Python translation.
+Label direction =
+# This requires a closer look to determine the most suitable Python translation.
+Label.new(
+# This requires a closer look to determine the most suitable Python translation.
+long=1,
+# This requires a closer look to determine the most suitable Python translation.
+short=-1,
+# This requires a closer look to determine the most suitable Python translation.
+neutral=0
+# This requires a closer look to determine the most suitable Python translation.
+)
+# This requires a closer look to determine the most suitable Python translation.
+maxBarsBackIndex = last_bar_index >= settings.maxBarsBack ? last_bar_index - settings.maxBarsBack : 0
+# This requires a closer look to determine the most suitable Python translation.
+useEmaFilter = input.bool(title="Use EMA Filter", defval=false, group="Filters", inline="ema")
+# This requires a closer look to determine the most suitable Python translation.
+emaPeriod = input.int(title="Period", defval=200, minval=1, step=1, group="Filters", inline="ema", tooltip="The period of the EMA used for the EMA Filter.")
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+isEmaUptrend = useEmaFilter ? close > ta.ema(close, emaPeriod) : true
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+isEmaDowntrend = useEmaFilter ? close < ta.ema(close, emaPeriod) : true
+# This requires a closer look to determine the most suitable Python translation.
+useSmaFilter = input.bool(title="Use SMA Filter", defval=false, group="Filters", inline="sma")
+# This requires a closer look to determine the most suitable Python translation.
+smaPeriod = input.int(title="Period", defval=200, minval=1, step=1, group="Filters", inline="sma", tooltip="The period of the SMA used for the SMA Filter.")
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+isSmaUptrend = useSmaFilter ? close > ta.sma(close, smaPeriod) : true
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+isSmaDowntrend = useSmaFilter ? close < ta.sma(close, smaPeriod) : true
+# This requires a closer look to determine the most suitable Python translation.
+useKernelFilter = input.bool(true, "Trade with Kernel", group="Kernel Settings", inline="kernel")
+# This requires a closer look to determine the most suitable Python translation.
+showKernelEstimate = input.bool(true, "Show Kernel Estimate", group="Kernel Settings", inline="kernel")
+# This requires a closer look to determine the most suitable Python translation.
+useKernelSmoothing = input.bool(false, "Enhance Kernel Smoothing", tooltip="Uses a crossover based mechanism to smoothen kernel color changes. This often results in less color transitions overall and may result in more ML entry signals being generated.", inline='1', group='Kernel Settings')
+# This requires a closer look to determine the most suitable Python translation.
+h = input.int(8, 'Lookback Window', minval=3, tooltip='The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars. Recommended range: 3-50', group="Kernel Settings", inline="kernel")
+# This requires a closer look to determine the most suitable Python translation.
+r = input.float(8., 'Relative Weighting', step=0.25, tooltip='Relative weighting of time frames. As this value approaches zero, the longer time frames will exert more influence on the estimation. As this value approaches infinity, the behavior of the Rational Quadratic Kernel will become identical to the Gaussian kernel. Recommended range: 0.25-25', group="Kernel Settings", inline="kernel")
+# This requires a closer look to determine the most suitable Python translation.
+x = input.int(25, "Regression Level", tooltip='Bar index on which to start regression. Controls how tightly fit the kernel estimate is to the data. Smaller values are a tighter fit. Larger values are a looser fit. Recommended range: 2-25', group="Kernel Settings", inline="kernel")
+# This requires a closer look to determine the most suitable Python translation.
+lag = input.int(2, "Lag", tooltip="Lag for crossover detection. Lower values result in earlier crossovers. Recommended range: 1-2", inline='1', group='Kernel Settings')
+# This requires a closer look to determine the most suitable Python translation.
+showBarColors = input.bool(true, "Show Bar Colors", tooltip="Whether to show the bar colors.", group="Display Settings")
+# This requires a closer look to determine the most suitable Python translation.
+showBarPredictions = input.bool(defval = true, title = "Show Bar Prediction Values", tooltip = "Will show the ML model's evaluation of each bar as an integer.", group="Display Settings")
+# This requires a closer look to determine the most suitable Python translation.
+useAtrOffset = input.bool(defval = false, title = "Use ATR Offset", tooltip = "Will use the ATR offset instead of the bar prediction offset.", group="Display Settings")
+# This requires a closer look to determine the most suitable Python translation.
+barPredictionsOffset = input.float(0, "Bar Prediction Offset", minval=0, tooltip="The offset of the bar predictions as a percentage from the bar high or close.", group="Display Settings")
+# This requires a closer look to determine the most suitable Python translation.
+src = settings.source
+# This requires a closer look to determine the most suitable Python translation.
+y_train_series = src[4] < src[0] ? direction.short : src[4] > src[0] ? direction.long : direction.neutral
+# This requires a closer look to determine the most suitable Python translation.
+var y_train_array = array.new_int(0)
+# This requires a closer look to determine the most suitable Python translation.
+var predictions = array.new_float(0)
+# This requires a closer look to determine the most suitable Python translation.
+var prediction = 0.
+# This requires a closer look to determine the most suitable Python translation.
+var signal = direction.neutral
+# This requires a closer look to determine the most suitable Python translation.
+var distances = array.new_float(0)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(y_train_array, y_train_series)
+# This requires a closer look to determine the most suitable Python translation.
+lastDistance = -1.0
+# This requires a closer look to determine the most suitable Python translation.
+size = math.min(settings.maxBarsBack-1, array.size(y_train_array)-1)
+# This requires a closer look to determine the most suitable Python translation.
+sizeLoop = math.min(settings.maxBarsBack-1, size)
+# This requires a closer look to determine the most suitable Python translation.
+if bar_index >= maxBarsBackIndex //{
+# This requires a closer look to determine the most suitable Python translation.
+for i = 0 to sizeLoop //{
+# This requires a closer look to determine the most suitable Python translation.
+d = get_lorentzian_distance(i, settings.featureCount, featureSeries, featureArrays)
+# This requires a closer look to determine the most suitable Python translation.
+if d >= lastDistance and i%4 //{
+# This requires a closer look to determine the most suitable Python translation.
+lastDistance := d
+# This requires a closer look to determine the most suitable Python translation.
+array.push(distances, d)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(predictions, math.round(array.get(y_train_array, i)))
+# This requires a closer look to determine the most suitable Python translation.
+if array.size(predictions) > settings.neighborsCount //{
+# This requires a closer look to determine the most suitable Python translation.
+lastDistance := array.get(distances, math.round(settings.neighborsCount*3/4))
+# This requires a closer look to determine the most suitable Python translation.
+array.shift(distances)
+# This requires a closer look to determine the most suitable Python translation.
+array.shift(predictions)
+# This requires a closer look to determine the most suitable Python translation.
+prediction := array.sum(predictions)
+# This requires a closer look to determine the most suitable Python translation.
+filter_all = filter.volatility and filter.regime and filter.adx
+# This requires a closer look to determine the most suitable Python translation.
+signal := prediction > 0 and filter_all ? direction.long : prediction < 0 and filter_all ? direction.short : nz(signal[1])
+# This requires a closer look to determine the most suitable Python translation.
+var int barsHeld = 0
+# This requires a closer look to determine the most suitable Python translation.
+barsHeld := ta.change(signal) ? 0 : barsHeld + 1
+# This requires a closer look to determine the most suitable Python translation.
+isHeldFourBars = barsHeld == 4
+# This requires a closer look to determine the most suitable Python translation.
+isHeldLessThanFourBars = 0 < barsHeld and barsHeld < 4
+# This requires a closer look to determine the most suitable Python translation.
+isDifferentSignalType = ta.change(signal)
+# This requires a closer look to determine the most suitable Python translation.
+isEarlySignalFlip = ta.change(signal) and (ta.change(signal[1]) or ta.change(signal[2]) or ta.change(signal[3]))
+# This requires a closer look to determine the most suitable Python translation.
+isBuySignal = signal == direction.long and isEmaUptrend and isSmaUptrend
+# This requires a closer look to determine the most suitable Python translation.
+isSellSignal = signal == direction.short and isEmaDowntrend and isSmaDowntrend
+# This requires a closer look to determine the most suitable Python translation.
+isLastSignalBuy = signal[4] == direction.long and isEmaUptrend[4] and isSmaUptrend[4]
+# This requires a closer look to determine the most suitable Python translation.
+isLastSignalSell = signal[4] == direction.short and isEmaDowntrend[4] and isSmaDowntrend[4]
+# This requires a closer look to determine the most suitable Python translation.
+isNewBuySignal = isBuySignal and isDifferentSignalType
+# This requires a closer look to determine the most suitable Python translation.
+isNewSellSignal = isSellSignal and isDifferentSignalType
+# This requires a closer look to determine the most suitable Python translation.
+c_green = color.new(#009988, 20)
+# This requires a closer look to determine the most suitable Python translation.
+c_red = color.new(#CC3311, 20)
+# This requires a closer look to determine the most suitable Python translation.
+transparent = color.new(#000000, 100)
+# This requires a closer look to determine the most suitable Python translation.
+yhat1 = kernels.rationalQuadratic(settings.source, h, r, x)
+# This requires a closer look to determine the most suitable Python translation.
+yhat2 = kernels.gaussian(settings.source, h-lag, x)
+# This requires a closer look to determine the most suitable Python translation.
+kernelEstimate = yhat1
+# This requires a closer look to determine the most suitable Python translation.
+bool wasBearishRate = yhat1[2] > yhat1[1]
+# This requires a closer look to determine the most suitable Python translation.
+bool wasBullishRate = yhat1[2] < yhat1[1]
+# This requires a closer look to determine the most suitable Python translation.
+bool isBearishRate = yhat1[1] > yhat1
+# This requires a closer look to determine the most suitable Python translation.
+bool isBullishRate = yhat1[1] < yhat1
+# This requires a closer look to determine the most suitable Python translation.
+isBearishChange = isBearishRate and wasBullishRate
+# This requires a closer look to determine the most suitable Python translation.
+isBullishChange = isBullishRate and wasBearishRate
+# This requires a closer look to determine the most suitable Python translation.
+bool isBullishCrossAlert = ta.crossover(yhat2, yhat1)
+# This requires a closer look to determine the most suitable Python translation.
+bool isBearishCrossAlert = ta.crossunder(yhat2, yhat1)
+# This requires a closer look to determine the most suitable Python translation.
+bool isBullishSmooth = yhat2 >= yhat1
+# This requires a closer look to determine the most suitable Python translation.
+bool isBearishSmooth = yhat2 <= yhat1
+# This requires a closer look to determine the most suitable Python translation.
+color colorByCross = isBullishSmooth ? c_green : c_red
+# This requires a closer look to determine the most suitable Python translation.
+color colorByRate = isBullishRate ? c_green : c_red
+# This requires a closer look to determine the most suitable Python translation.
+color plotColor = showKernelEstimate ? (useKernelSmoothing ? colorByCross : colorByRate) : transparent
+# Visual functions like plot and bgcolor are specific to TradingView. They can be replaced with Python plotting libraries like matplotlib.
+plot(kernelEstimate, color=plotColor, linewidth=2, title="Kernel Regression Estimate")
+# This requires a closer look to determine the most suitable Python translation.
+bool alertBullish = useKernelSmoothing ? isBullishCrossAlert : isBullishChange
+# This requires a closer look to determine the most suitable Python translation.
+bool alertBearish = useKernelSmoothing ? isBearishCrossAlert : isBearishChange
+# This requires a closer look to determine the most suitable Python translation.
+isBullish = useKernelFilter ? (useKernelSmoothing ? isBullishSmooth : isBullishRate) : true
+# This requires a closer look to determine the most suitable Python translation.
+isBearish = useKernelFilter ? (useKernelSmoothing ? isBearishSmooth : isBearishRate) : true
+# This requires a closer look to determine the most suitable Python translation.
+startLongTrade = isNewBuySignal and isBullish and isEmaUptrend and isSmaUptrend
+# This requires a closer look to determine the most suitable Python translation.
+startShortTrade = isNewSellSignal and isBearish and isEmaDowntrend and isSmaDowntrend
+# This requires a closer look to determine the most suitable Python translation.
+lastSignalWasBullish = ta.barssince(startLongTrade) < ta.barssince(startShortTrade)
+# This requires a closer look to determine the most suitable Python translation.
+lastSignalWasBearish = ta.barssince(startShortTrade) < ta.barssince(startLongTrade)
+# This requires a closer look to determine the most suitable Python translation.
+barsSinceRedEntry = ta.barssince(startShortTrade)
+# This requires a closer look to determine the most suitable Python translation.
+barsSinceRedExit = ta.barssince(alertBullish)
+# This requires a closer look to determine the most suitable Python translation.
+barsSinceGreenEntry = ta.barssince(startLongTrade)
+# This requires a closer look to determine the most suitable Python translation.
+barsSinceGreenExit = ta.barssince(alertBearish)
+# This requires a closer look to determine the most suitable Python translation.
+isValidShortExit = barsSinceRedExit > barsSinceRedEntry
+# This requires a closer look to determine the most suitable Python translation.
+isValidLongExit = barsSinceGreenExit > barsSinceGreenEntry
+# This requires a closer look to determine the most suitable Python translation.
+endLongTradeDynamic = (isBearishChange and isValidLongExit[1])
+# This requires a closer look to determine the most suitable Python translation.
+endShortTradeDynamic = (isBullishChange and isValidShortExit[1])
+# This requires a closer look to determine the most suitable Python translation.
+endLongTradeStrict = ((isHeldFourBars and isLastSignalBuy) or (isHeldLessThanFourBars and isNewSellSignal and isLastSignalBuy)) and startLongTrade[4]
+# This requires a closer look to determine the most suitable Python translation.
+endShortTradeStrict = ((isHeldFourBars and isLastSignalSell) or (isHeldLessThanFourBars and isNewBuySignal and isLastSignalSell)) and startShortTrade[4]
+# This requires a closer look to determine the most suitable Python translation.
+isDynamicExitValid = not useEmaFilter and not useSmaFilter and not useKernelSmoothing
+# This requires a closer look to determine the most suitable Python translation.
+endLongTrade = settings.useDynamicExits and isDynamicExitValid ? endLongTradeDynamic : endLongTradeStrict
+# This requires a closer look to determine the most suitable Python translation.
+endShortTrade = settings.useDynamicExits and isDynamicExitValid ? endShortTradeDynamic : endShortTradeStrict
+# This requires a closer look to determine the most suitable Python translation.
+plotshape(startLongTrade ? low : na, 'Buy', shape.labelup, location.belowbar, color=ml.color_green(prediction), size=size.small, offset=0)
+# This requires a closer look to determine the most suitable Python translation.
+plotshape(startShortTrade ? high : na, 'Sell', shape.labeldown, location.abovebar, ml.color_red(-prediction), size=size.small, offset=0)
+# This requires a closer look to determine the most suitable Python translation.
+plotshape(endLongTrade and settings.showExits ? high : na, 'StopBuy', shape.xcross, location.absolute, color=#3AFF17, size=size.tiny, offset=0)
+# This requires a closer look to determine the most suitable Python translation.
+plotshape(endShortTrade and settings.showExits ? low : na, 'StopSell', shape.xcross, location.absolute, color=#FD1707, size=size.tiny, offset=0)
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(startLongTrade, title='Open Long ▲', message='LDC Open Long ▲ | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(endLongTrade, title='Close Long ▲', message='LDC Close Long ▲ | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(startShortTrade, title='Open Short ▼', message='LDC Open Short  | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(endShortTrade, title='Close Short ▼', message='LDC Close Short ▼ | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(startShortTrade or startLongTrade, title='Open Position ▲▼', message='LDC Open Position ▲▼ | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(endShortTrade or endLongTrade, title='Close Position ▲▼', message='LDC Close Position  ▲▼ | {{ticker}}@[{{close}}] | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(condition=alertBullish, title='Kernel Bullish Color Change', message='LDC Kernel Bullish ▲ | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+alertcondition(condition=alertBearish, title='Kernel Bearish Color Change', message='LDC Kernel Bearish ▼ | {{ticker}}@{{close}} | ({{interval}})')
+# This requires a closer look to determine the most suitable Python translation.
+atrSpaced = useAtrOffset ? ta.atr(1) : na
+# This requires a closer look to determine the most suitable Python translation.
+compressionFactor = settings.neighborsCount / settings.colorCompression
+# This requires a closer look to determine the most suitable Python translation.
+c_pred = prediction > 0 ? color.from_gradient(prediction, 0, compressionFactor, #787b86, #009988) : prediction <= 0 ? color.from_gradient(prediction, -compressionFactor, 0, #CC3311, #787b86) : na
+# This requires a closer look to determine the most suitable Python translation.
+c_label = showBarPredictions ? c_pred : na
+# This requires a closer look to determine the most suitable Python translation.
+c_bars = showBarColors ? color.new(c_pred, 50) : na
+# This requires a closer look to determine the most suitable Python translation.
+x_val = bar_index
+# This requires a closer look to determine the most suitable Python translation.
+y_val = useAtrOffset ? prediction > 0 ? high + atrSpaced: low - atrSpaced : prediction > 0 ? high + hl2*barPredictionsOffset/20 : low - hl2*barPredictionsOffset/30
+# This requires a closer look to determine the most suitable Python translation.
+label.new(x_val, y_val, str.tostring(prediction), xloc.bar_index, yloc.price, color.new(color.white, 100), label.style_label_up, c_label, size.normal, text.align_left)
+# This requires a closer look to determine the most suitable Python translation.
+barcolor(showBarColors ? color.new(c_pred, 50) : na)
+# This requires a closer look to determine the most suitable Python translation.
+backTestStream = switch
+# This requires a closer look to determine the most suitable Python translation.
+startLongTrade => 1
+# This requires a closer look to determine the most suitable Python translation.
+endLongTrade => 2
+# This requires a closer look to determine the most suitable Python translation.
+startShortTrade => -1
+# This requires a closer look to determine the most suitable Python translation.
+endShortTrade => -2
+# Visual functions like plot and bgcolor are specific to TradingView. They can be replaced with Python plotting libraries like matplotlib.
+plot(backTestStream, "Backtest Stream", display=display.none)
+# This requires a closer look to determine the most suitable Python translation.
+[totalWins, totalLosses, totalEarlySignalFlips, totalTrades, tradeStatsHeader, winLossRatio, winRate] = ml.backtest(high, low, open, startLongTrade, endLongTrade, startShortTrade, endShortTrade, isEarlySignalFlip, maxBarsBackIndex, bar_index, settings.source, useWorstCase)
+# This requires a closer look to determine the most suitable Python translation.
+init_table() =>
+# This requires a closer look to determine the most suitable Python translation.
+c_transparent = color.new(color.black, 100)
+# This requires a closer look to determine the most suitable Python translation.
+table.new(position.top_right, columns=2, rows=7, frame_color=color.new(color.black, 100), frame_width=1, border_width=1, border_color=c_transparent)
+# This requires a closer look to determine the most suitable Python translation.
+update_table(tbl, tradeStatsHeader, totalTrades, totalWins, totalLosses, winLossRatio, winRate, stopLosses) =>
+# This requires a closer look to determine the most suitable Python translation.
+c_transparent = color.new(color.black, 100)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 0, tradeStatsHeader, text_halign=text.align_center, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 1, 'Winrate', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 1, str.tostring(totalWins / totalTrades, '#.#%'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 2, 'Trades', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 2, str.tostring(totalTrades, '#') + ' (' + str.tostring(totalWins, '#') + '|' + str.tostring(totalLosses, '#') + ')', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 5, 'WL Ratio', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 5, str.tostring(totalWins / totalLosses, '0.00'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 6, 'Early Signal Flips', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 6, str.tostring(totalEarlySignalFlips, '#'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+if showTradeStats
+# This requires a closer look to determine the most suitable Python translation.
+var tbl = ml.init_table()
+# This requires a closer look to determine the most suitable Python translation.
+if barstate.islast
+# This requires a closer look to determine the most suitable Python translation.
+update_table(tbl, tradeStatsHeader, totalTrades, totalWins, totalLosses, winLossRatio, winRate, totalEarlySignalFlips)
+# This requires a closer look to determine the most suitable Python translation.
+export rationalQuadratic(series float _src, simple int _lookback, simple float _relativeWeight, simple int startAtBar) =>
+# This requires a closer look to determine the most suitable Python translation.
+float _currentWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+float _cumulativeWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+_size = array.size(array.from(_src))
+# This requires a closer look to determine the most suitable Python translation.
+for i = 0 to _size + startAtBar
+# This requires a closer look to determine the most suitable Python translation.
+y = _src[i]
+# This requires a closer look to determine the most suitable Python translation.
+w = math.pow(1 + (math.pow(i, 2) / ((math.pow(_lookback, 2) * 2 * _relativeWeight))), -_relativeWeight)
+# This requires a closer look to determine the most suitable Python translation.
+_currentWeight += y*w
+# This requires a closer look to determine the most suitable Python translation.
+_cumulativeWeight += w
+# This requires a closer look to determine the most suitable Python translation.
+yhat = _currentWeight / _cumulativeWeight
+# This requires a closer look to determine the most suitable Python translation.
+yhat
+# This requires a closer look to determine the most suitable Python translation.
+export gaussian(series float _src, simple int _lookback, simple int startAtBar) =>
+# This requires a closer look to determine the most suitable Python translation.
+float _currentWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+float _cumulativeWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+_size = array.size(array.from(_src))
+# This requires a closer look to determine the most suitable Python translation.
+for i = 0 to _size + startAtBar
+# This requires a closer look to determine the most suitable Python translation.
+y = _src[i]
+# This requires a closer look to determine the most suitable Python translation.
+w = math.exp(-math.pow(i, 2) / (2 * math.pow(_lookback, 2)))
+# This requires a closer look to determine the most suitable Python translation.
+_currentWeight += y*w
+# This requires a closer look to determine the most suitable Python translation.
+_cumulativeWeight += w
+# This requires a closer look to determine the most suitable Python translation.
+yhat = _currentWeight / _cumulativeWeight
+# This requires a closer look to determine the most suitable Python translation.
+yhat
+# This requires a closer look to determine the most suitable Python translation.
+export periodic(series float _src, simple int _lookback, simple int _period, simple int startAtBar) =>
+# This requires a closer look to determine the most suitable Python translation.
+float _currentWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+float _cumulativeWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+_size = array.size(array.from(_src))
+# This requires a closer look to determine the most suitable Python translation.
+for i = 0 to _size + startAtBar
+# This requires a closer look to determine the most suitable Python translation.
+y = _src[i]
+# This requires a closer look to determine the most suitable Python translation.
+w = math.exp(-2*math.pow(math.sin(math.pi * i / _period), 2) / math.pow(_lookback, 2))
+# This requires a closer look to determine the most suitable Python translation.
+_currentWeight += y*w
+# This requires a closer look to determine the most suitable Python translation.
+_cumulativeWeight += w
+# This requires a closer look to determine the most suitable Python translation.
+yhat = _currentWeight / _cumulativeWeight
+# This requires a closer look to determine the most suitable Python translation.
+yhat
+# This requires a closer look to determine the most suitable Python translation.
+export locallyPeriodic(series float _src, simple int _lookback, simple int _period, simple int startAtBar) =>
+# This requires a closer look to determine the most suitable Python translation.
+float _currentWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+float _cumulativeWeight = 0.
+# This requires a closer look to determine the most suitable Python translation.
+_size = array.size(array.from(_src))
+# This requires a closer look to determine the most suitable Python translation.
+for i = 0 to _size + startAtBar
+# This requires a closer look to determine the most suitable Python translation.
+y = _src[i]
+# This requires a closer look to determine the most suitable Python translation.
+w = math.exp(-2*math.pow(math.sin(math.pi * i / _period), 2) / math.pow(_lookback, 2)) * math.exp(-math.pow(i, 2) / (2 * math.pow(_lookback, 2)))
+# This requires a closer look to determine the most suitable Python translation.
+_currentWeight += y*w
+# This requires a closer look to determine the most suitable Python translation.
+_cumulativeWeight += w
+# This requires a closer look to determine the most suitable Python translation.
+yhat = _currentWeight / _cumulativeWeight
+# This requires a closer look to determine the most suitable Python translation.
+yhat
+# This requires a closer look to determine the most suitable Python translation.
+yhat1 = rationalQuadratic(close, 8, 1, 25)
+# This requires a closer look to determine the most suitable Python translation.
+yhat2 = gaussian(close, 16, 25)
+# This requires a closer look to determine the most suitable Python translation.
+yhat3 = periodic(close, 8, 100, 25)
+# This requires a closer look to determine the most suitable Python translation.
+yhat4 = locallyPeriodic(close, 8, 24, 25)
+# Visual functions like plot and bgcolor are specific to TradingView. They can be replaced with Python plotting libraries like matplotlib.
+plot(yhat1, color = color.red, title = "Rational Quadratic Kernel")
+# Visual functions like plot and bgcolor are specific to TradingView. They can be replaced with Python plotting libraries like matplotlib.
+plot(yhat2, color = color.yellow, title = "Gaussian Kernel")
+# Visual functions like plot and bgcolor are specific to TradingView. They can be replaced with Python plotting libraries like matplotlib.
+plot(yhat3, color = color.green, title = "Periodic Kernel")
+# Visual functions like plot and bgcolor are specific to TradingView. They can be replaced with Python plotting libraries like matplotlib.
+plot(yhat4, color = color.aqua, title = "Locally Periodic Kernel")
+# This requires a closer look to determine the most suitable Python translation.
+export normalizeDeriv(series float src, int quadraticMeanLength) =>
+# This requires a closer look to determine the most suitable Python translation.
+float deriv = src - src[2]
+# This requires a closer look to determine the most suitable Python translation.
+quadraticMean = math.sqrt(nz(math.sum(math.pow(deriv, 2), quadraticMeanLength) / quadraticMeanLength))
+# This requires a closer look to determine the most suitable Python translation.
+nDeriv = deriv / quadraticMean
+# This requires a closer look to determine the most suitable Python translation.
+nDeriv
+# This requires a closer look to determine the most suitable Python translation.
+export normalize(series float src, float min, float max) =>
+# This requires a closer look to determine the most suitable Python translation.
+var _historicMin =  10e10
+# This requires a closer look to determine the most suitable Python translation.
+var _historicMax = -10e10
+# This requires a closer look to determine the most suitable Python translation.
+_historicMin := math.min(nz(src, _historicMin), _historicMin)
+# This requires a closer look to determine the most suitable Python translation.
+_historicMax := math.max(nz(src, _historicMax), _historicMax)
+# This requires a closer look to determine the most suitable Python translation.
+min + (max - min) * (src - _historicMin) / math.max(_historicMax - _historicMin, 10e-10)
+# This requires a closer look to determine the most suitable Python translation.
+export rescale(series float src, float oldMin, float oldMax, float newMin, float newMax) =>
+# This requires a closer look to determine the most suitable Python translation.
+newMin + (newMax - newMin) * (src - oldMin) / math.max(oldMax - oldMin, 10e-10)
+# This requires a closer look to determine the most suitable Python translation.
+export getColorShades(color color) =>
+# This requires a closer look to determine the most suitable Python translation.
+float r = color.r(color)
+# This requires a closer look to determine the most suitable Python translation.
+float g = color.g(color)
+# This requires a closer look to determine the most suitable Python translation.
+float b = color.b(color)
+# This requires a closer look to determine the most suitable Python translation.
+int[] intensity = array.new_int(0)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(intensity, 25)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(intensity, 50)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(intensity, 75)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(intensity, 100)
+# This requires a closer look to determine the most suitable Python translation.
+color[] shades = array.new_color(0)
+# This requires a closer look to determine the most suitable Python translation.
+for i = 0 to array.size(intensity) - 1
+# This requires a closer look to determine the most suitable Python translation.
+float shadeR = r * array.get(intensity, i) / 100
+# This requires a closer look to determine the most suitable Python translation.
+float shadeG = g * array.get(intensity, i) / 100
+# This requires a closer look to determine the most suitable Python translation.
+float shadeB = b * array.get(intensity, i) / 100
+# This requires a closer look to determine the most suitable Python translation.
+color shadeColor = color.rgb(shadeR, shadeG, shadeB)
+# This requires a closer look to determine the most suitable Python translation.
+array.push(shades, shadeColor)
+# This requires a closer look to determine the most suitable Python translation.
+shades
+# This requires a closer look to determine the most suitable Python translation.
+export getPredictionColor(float prediction, int neighborsCount, array<color> shadesArr) =>
+# This requires a closer look to determine the most suitable Python translation.
+float percentile = prediction / neighborsCount * 100
+# This requires a closer look to determine the most suitable Python translation.
+color shade = na
+# This requires a closer look to determine the most suitable Python translation.
+switch
+# This requires a closer look to determine the most suitable Python translation.
+percentile >= 75 => shade := array.get(shadesArr, 3) // most intense shade
+# This requires a closer look to determine the most suitable Python translation.
+percentile >= 50 => shade := array.get(shadesArr, 2)
+# This requires a closer look to determine the most suitable Python translation.
+percentile >= 25 => shade := array.get(shadesArr, 1)
+# This requires a closer look to determine the most suitable Python translation.
+percentile >= 0  => shade := array.get(shadesArr, 0) // least intense shade
+# This requires a closer look to determine the most suitable Python translation.
+shade
+# This requires a closer look to determine the most suitable Python translation.
+export color_green(float prediction) =>
+# This requires a closer look to determine the most suitable Python translation.
+switch
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 9 => #15FF00
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 8 => #15FF00E5
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 7 => #09FF00CC
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 6 => #09FF00B2
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 5 => #09FF0099
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 4 => #15FF007F
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 3 => #00FF0066
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 2 => #09FF004C
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 1 => #09FF0033
+# This requires a closer look to determine the most suitable Python translation.
+=> #15FF0019
+# This requires a closer look to determine the most suitable Python translation.
+export color_red(float prediction) =>
+# This requires a closer look to determine the most suitable Python translation.
+switch
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 9 => #CC3311
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 8 => #CC3311E5
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 7 => #B23111CC
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 6 => #B23111B2
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 5 => #B2311199
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 4 => #CC33117F
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 3 => #CC331166
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 2 => #CC33114C
+# This requires a closer look to determine the most suitable Python translation.
+prediction >= 1 => #CC331133
+# This requires a closer look to determine the most suitable Python translation.
+=> #CC331119
+# This requires a closer look to determine the most suitable Python translation.
+export tanh(series float src) =>
+# This requires a closer look to determine the most suitable Python translation.
+tanh = -1 + 2/(1 + math.exp(-2*src))
+# This requires a closer look to determine the most suitable Python translation.
+tanh
+# This requires a closer look to determine the most suitable Python translation.
+export dualPoleFilter(series float src, int lookback) =>
+# This requires a closer look to determine the most suitable Python translation.
+float omega = -99 * math.pi / (70 * lookback)
+# This requires a closer look to determine the most suitable Python translation.
+float alpha = math.exp(omega)
+# This requires a closer look to determine the most suitable Python translation.
+float beta = -math.pow(alpha, 2)
+# This requires a closer look to determine the most suitable Python translation.
+float gamma = math.cos(omega) * 2 * alpha
+# This requires a closer look to determine the most suitable Python translation.
+float delta = 1 - gamma - beta
+# This requires a closer look to determine the most suitable Python translation.
+float slidingAvg = 0.5 * (src + nz(src[1], src))
+# This requires a closer look to determine the most suitable Python translation.
+float filter = na
+# This requires a closer look to determine the most suitable Python translation.
+filter := (delta*slidingAvg) + gamma*nz(filter[1]) + beta*nz(filter[2])
+# This requires a closer look to determine the most suitable Python translation.
+filter
+# This requires a closer look to determine the most suitable Python translation.
+export tanhTransform(series float src, int smoothingFrequency, int quadraticMeanLength) =>
+# This requires a closer look to determine the most suitable Python translation.
+signal = dualPoleFilter(tanh(normalizeDeriv(src, quadraticMeanLength)), smoothingFrequency)
+# This requires a closer look to determine the most suitable Python translation.
+signal
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+export n_rsi(series float src, simple int n1, simple int n2) =>
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+rescale(ta.ema(ta.rsi(src, n1), n2), 0, 100, 0, 1)
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+export n_cci(series float src, simple int n1, simple int n2) =>
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+normalize(ta.ema(ta.cci(src, n1), n2), 0, 1)
+# This requires a closer look to determine the most suitable Python translation.
+export n_wt(series float src, simple int n1=10, simple int n2=11) =>
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+ema1 = ta.ema(src, n1)
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+ema2 = ta.ema(math.abs(src - ema1), n1)
+# This requires a closer look to determine the most suitable Python translation.
+ci = (src - ema1) / (0.015 * ema2)
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+wt1 = ta.ema(ci, n2) // tci
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+wt2 = ta.sma(wt1, 4)
+# This requires a closer look to determine the most suitable Python translation.
+normalize(wt1 - wt2, 0, 1)
+# This requires a closer look to determine the most suitable Python translation.
+export n_adx(series float highSrc, series float lowSrc, series float closeSrc, simple int n1) =>
+# This requires a closer look to determine the most suitable Python translation.
+length = n1
+# This requires a closer look to determine the most suitable Python translation.
+th = 20
+# This requires a closer look to determine the most suitable Python translation.
+tr = math.max(math.max(highSrc - lowSrc, math.abs(highSrc - nz(closeSrc[1]))), math.abs(lowSrc - nz(closeSrc[1])))
+# This requires a closer look to determine the most suitable Python translation.
+directionalMovementPlus = highSrc - nz(highSrc[1]) > nz(lowSrc[1]) - lowSrc ? math.max(highSrc - nz(highSrc[1]), 0) : 0
+# This requires a closer look to determine the most suitable Python translation.
+negMovement = nz(lowSrc[1]) - lowSrc > highSrc - nz(highSrc[1]) ? math.max(nz(lowSrc[1]) - lowSrc, 0) : 0
+# This requires a closer look to determine the most suitable Python translation.
+trSmooth = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+trSmooth := nz(trSmooth[1]) - nz(trSmooth[1]) / length + tr
+# This requires a closer look to determine the most suitable Python translation.
+smoothDirectionalMovementPlus = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+smoothDirectionalMovementPlus := nz(smoothDirectionalMovementPlus[1]) - nz(smoothDirectionalMovementPlus[1]) / length + directionalMovementPlus
+# This requires a closer look to determine the most suitable Python translation.
+smoothnegMovement = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+smoothnegMovement := nz(smoothnegMovement[1]) - nz(smoothnegMovement[1]) / length + negMovement
+# This requires a closer look to determine the most suitable Python translation.
+diPositive = smoothDirectionalMovementPlus / trSmooth * 100
+# This requires a closer look to determine the most suitable Python translation.
+diNegative = smoothnegMovement / trSmooth * 100
+# This requires a closer look to determine the most suitable Python translation.
+dx = math.abs(diPositive - diNegative) / (diPositive + diNegative) * 100
+# This requires a closer look to determine the most suitable Python translation.
+adx = ta.rma(dx, length)
+# This requires a closer look to determine the most suitable Python translation.
+rescale(adx, 0, 100, 0, 1)
+# This requires a closer look to determine the most suitable Python translation.
+export regime_filter(series float src=ohlc4, float threshold, bool useRegimeFilter) =>
+# This requires a closer look to determine the most suitable Python translation.
+value1 = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+value2 = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+klmf = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+value1 := 0.2 * (src - src[1]) + 0.8 * nz(value1[1])
+# This requires a closer look to determine the most suitable Python translation.
+value2 := 0.1 * (high - low) + 0.8 * nz(value2[1])
+# This requires a closer look to determine the most suitable Python translation.
+omega = math.abs(value1 / value2)
+# This requires a closer look to determine the most suitable Python translation.
+alpha = (-math.pow(omega,2) + math.sqrt(math.pow(omega, 4) + 16 * math.pow(omega,2))) / 8
+# This requires a closer look to determine the most suitable Python translation.
+klmf := alpha * src + (1 - alpha) * nz(klmf[1])
+# This requires a closer look to determine the most suitable Python translation.
+absCurveSlope = math.abs(klmf - klmf[1])
+# This appears to use a built-in Pine Script technical indicator. TA-Lib provides equivalent functions for these.
+exponentialAverageAbsCurveSlope = 1.0 * ta.ema(absCurveSlope, 200)
+# This requires a closer look to determine the most suitable Python translation.
+normalized_slope_decline = (absCurveSlope - exponentialAverageAbsCurveSlope) / exponentialAverageAbsCurveSlope
+# This requires a closer look to determine the most suitable Python translation.
+useRegimeFilter ? normalized_slope_decline >= threshold : true
+# This requires a closer look to determine the most suitable Python translation.
+export filter_adx(series float src=close, simple int length=14, int adxThreshold, bool useAdxFilter) =>
+# This requires a closer look to determine the most suitable Python translation.
+tr = math.max(math.max(high - low, math.abs(high - nz(src[1]))), math.abs(low - nz(src[1])))
+# This requires a closer look to determine the most suitable Python translation.
+directionalMovementPlus = high - nz(high[1]) > nz(low[1]) - low ? math.max(high - nz(high[1]), 0) : 0
+# This requires a closer look to determine the most suitable Python translation.
+negMovement = nz(low[1]) - low > high - nz(high[1]) ? math.max(nz(low[1]) - low, 0) : 0
+# This requires a closer look to determine the most suitable Python translation.
+trSmooth = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+trSmooth := nz(trSmooth[1]) - nz(trSmooth[1]) / length + tr
+# This requires a closer look to determine the most suitable Python translation.
+smoothDirectionalMovementPlus = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+smoothDirectionalMovementPlus := nz(smoothDirectionalMovementPlus[1]) - nz(smoothDirectionalMovementPlus[1]) / length + directionalMovementPlus
+# This requires a closer look to determine the most suitable Python translation.
+smoothnegMovement = 0.0
+# This requires a closer look to determine the most suitable Python translation.
+smoothnegMovement := nz(smoothnegMovement[1]) - nz(smoothnegMovement[1]) / length + negMovement
+# This requires a closer look to determine the most suitable Python translation.
+diPositive = smoothDirectionalMovementPlus / trSmooth * 100
+# This requires a closer look to determine the most suitable Python translation.
+diNegative = smoothnegMovement / trSmooth * 100
+# This requires a closer look to determine the most suitable Python translation.
+dx = math.abs(diPositive - diNegative) / (diPositive + diNegative) * 100
+# This requires a closer look to determine the most suitable Python translation.
+adx = ta.rma(dx, length)
+# This requires a closer look to determine the most suitable Python translation.
+useAdxFilter ? adx > adxThreshold : true
+# This requires a closer look to determine the most suitable Python translation.
+export filter_volatility(simple int minLength=1, simple int maxLength=10, bool useVolatilityFilter) =>
+# This requires a closer look to determine the most suitable Python translation.
+recentAtr = ta.atr(minLength)
+# This requires a closer look to determine the most suitable Python translation.
+historicalAtr = ta.atr(maxLength)
+# This requires a closer look to determine the most suitable Python translation.
+useVolatilityFilter ? recentAtr > historicalAtr : true
+# This requires a closer look to determine the most suitable Python translation.
+export backtest(series float high, series float low, series float open, series bool startLongTrade, series bool endLongTrade, series bool startShortTrade, series bool endShortTrade, series bool isEarlySignalFlip, int maxBarsBackIndex, int thisBarIndex, series float src, bool useWorstCase) =>
+# This requires a closer look to determine the most suitable Python translation.
+marketPrice = useWorstCase ? src : (high + low + open + open)/4
+# This requires a closer look to determine the most suitable Python translation.
+var float start_long_trade = marketPrice
+# This requires a closer look to determine the most suitable Python translation.
+var float start_short_trade = marketPrice
+# This requires a closer look to determine the most suitable Python translation.
+var float total_short_profit = 0.
+# This requires a closer look to determine the most suitable Python translation.
+var float total_long_profit = 0.
+# This requires a closer look to determine the most suitable Python translation.
+var int wins = 0
+# This requires a closer look to determine the most suitable Python translation.
+var int losses = 0
+# This requires a closer look to determine the most suitable Python translation.
+var int trade_count = 0
+# This requires a closer look to determine the most suitable Python translation.
+var int early_signal_flip_count = 0
+# This requires a closer look to determine the most suitable Python translation.
+var bool tookProfit = false
+# This requires a closer look to determine the most suitable Python translation.
+lot_size = 1
+# This requires a closer look to determine the most suitable Python translation.
+if thisBarIndex > maxBarsBackIndex
+# This requires a closer look to determine the most suitable Python translation.
+trade_count := 0
+# This requires a closer look to determine the most suitable Python translation.
+wins := 0
+# This requires a closer look to determine the most suitable Python translation.
+losses := 0
+# This requires a closer look to determine the most suitable Python translation.
+early_signal_flip_count := 0
+# This requires a closer look to determine the most suitable Python translation.
+if startLongTrade
+# This requires a closer look to determine the most suitable Python translation.
+start_short_trade := 0.
+# This requires a closer look to determine the most suitable Python translation.
+early_signal_flip_count := isEarlySignalFlip ? 1 : 0
+# This requires a closer look to determine the most suitable Python translation.
+start_long_trade := marketPrice
+# This requires a closer look to determine the most suitable Python translation.
+trade_count := 1
+# This requires a closer look to determine the most suitable Python translation.
+if endLongTrade
+# This requires a closer look to determine the most suitable Python translation.
+delta = marketPrice - start_long_trade
+# This requires a closer look to determine the most suitable Python translation.
+wins := delta > 0 ? 1 : 0
+# This requires a closer look to determine the most suitable Python translation.
+losses := delta < 0 ? 1 : 0
+# This requires a closer look to determine the most suitable Python translation.
+total_long_profit := delta * lot_size
+# This requires a closer look to determine the most suitable Python translation.
+if startShortTrade
+# This requires a closer look to determine the most suitable Python translation.
+start_long_trade := 0.
+# This requires a closer look to determine the most suitable Python translation.
+start_short_trade := marketPrice
+# This requires a closer look to determine the most suitable Python translation.
+trade_count := 1
+# This requires a closer look to determine the most suitable Python translation.
+if endShortTrade
+# This requires a closer look to determine the most suitable Python translation.
+early_signal_flip_count := isEarlySignalFlip ? 1 : 0
+# This requires a closer look to determine the most suitable Python translation.
+delta = start_short_trade - marketPrice
+# This requires a closer look to determine the most suitable Python translation.
+wins := delta > 0 ? 1 : 0
+# This requires a closer look to determine the most suitable Python translation.
+losses := delta < 0 ? 1 : 0
+# This requires a closer look to determine the most suitable Python translation.
+total_short_profit := delta * lot_size
+# This requires a closer look to determine the most suitable Python translation.
+tradeStatsHeader = '📈 Trade Stats'
+# This requires a closer look to determine the most suitable Python translation.
+longProfit = ta.cum(total_long_profit)
+# This requires a closer look to determine the most suitable Python translation.
+shortProfit = ta.cum(total_short_profit)
+# This requires a closer look to determine the most suitable Python translation.
+longShortProfit = longProfit + shortProfit
+# This requires a closer look to determine the most suitable Python translation.
+totalEarlySignalFlips = ta.cum(early_signal_flip_count)
+# This requires a closer look to determine the most suitable Python translation.
+totalWins = ta.cum(wins)
+# This requires a closer look to determine the most suitable Python translation.
+totalLosses = ta.cum(losses)
+# This requires a closer look to determine the most suitable Python translation.
+totalTrades = ta.cum(wins+losses)
+# This requires a closer look to determine the most suitable Python translation.
+winLossRatio = totalWins / totalTrades
+# This requires a closer look to determine the most suitable Python translation.
+winRate = totalWins / (totalWins + totalLosses)
+# This requires a closer look to determine the most suitable Python translation.
+[totalWins, totalLosses, totalEarlySignalFlips, totalTrades, tradeStatsHeader, winLossRatio, winRate]
+# This requires a closer look to determine the most suitable Python translation.
+export init_table() =>
+# This requires a closer look to determine the most suitable Python translation.
+c_transparent = color.new(color.black, 100)
+# This requires a closer look to determine the most suitable Python translation.
+table.new(position.top_right, columns=2, rows=7, frame_color=c_transparent, frame_width=1, border_width=1, border_color=c_transparent)
+# This requires a closer look to determine the most suitable Python translation.
+export update_table(series table tbl, string tradeStatsHeader, float totalTrades, float totalWins, float totalLosses, float winLossRatio, float winrate, float earlySignalFlips) =>
+# This requires a closer look to determine the most suitable Python translation.
+c_transparent = color.new(color.black, 100)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 0, tradeStatsHeader, text_halign=text.align_center, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 1, 'Winrate', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 1, str.tostring(winrate, '#.#') + '%', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 2, 'Trades', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 2, str.tostring(totalTrades, '#') + ' (' + str.tostring(totalWins, '#') + '|' + str.tostring(totalLosses, '#') + ')', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 5, 'WL Ratio', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 5, str.tostring(winLossRatio, '#.#'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 0, 6, 'Early Signal Flip Count', text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)
+# This requires a closer look to determine the most suitable Python translation.
+table.cell(tbl, 1, 6, str.tostring(earlySignalFlips, '#'), text_halign=text.align_center, bgcolor=c_transparent, text_color=color.gray, text_size=size.normal)

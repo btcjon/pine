@@ -1,0 +1,141 @@
+//@version=5
+//@author=LucF, for PineCoders
+
+// MTF Selection Framework - PineCoders FAQ
+//  v1.8, 2020.02.17 10:24 — LucF
+
+// PineCoders, Tools and ideas for all Pine coders: pinecoders.com
+
+// This script provides a framework to add MTF capabilities to another script.
+//  • The higher timeframe can be selected using one of 3 ways: in steps, by a multiple of the chart's resolution, or fixed.
+//  • The HTF line can be smoothed.
+//  • Non-repainting/Repainting mode can be selected.
+
+// PineCoders FAQ & Code question linking here: http://www.pinecoders.com/faq_and_code/#other-intervals-mtf
+// This indicator's TradingView page: https://www.tradingview.com/script/90mqACUV-MTF-Selection-Framework-PineCoders-FAQ/
+
+indicator('TTB MTF Selection Framework')
+
+vTF0 = '0. None.'
+vTF1 = '1. Discrete Steps (60min, 1D, 3D, 1W, 1M, 12M)'
+vTF2 = '2. Multiple Of Current TF'
+vTF3 = '3. Fixed TF'
+rsiLength = input.int(20, 'RSI Length', minval=2)
+_2 = input(true, '═════════ HTF Selection ══════════')
+vHtfType = input.string(vTF2, 'Higher Timeframe Selection', options=[vTF0, vTF1, vTF2, vTF3])
+vHtfType2 = input.float(3., '  2. Multiple of Current TF', minval=1)
+vHtfType3 = input.timeframe('D', '  3. Fixed TF')
+vHtfRepaints = input(false, 'Repainting HTF')
+vHtfSmooth = input(false, 'Smooth Higher Timeframes')
+vHtfSmooothFact = input.int(4, '  Smoothing Factor', minval=1)
+vHtfShow = input(true, 'Show HTF Being Used')
+vOffsetLabels = input(3, 'Labels Offset')
+var vHtfOn = vHtfType != vTF0
+
+
+// —————————— PineCoders MTF Selection Framework functions
+// ————— Converts current "timeframe.multiplier" plus the TF into minutes of type float.
+f_resInMinutes() =>
+    _resInMinutes = timeframe.multiplier * (timeframe.isseconds ? 1. / 60. : timeframe.isminutes ? 1. : timeframe.isdaily ? 1440. : timeframe.isweekly ? 10080. : timeframe.ismonthly ? 43800. : na)
+    _resInMinutes
+
+// ————— Returns resolution of _resolution period in minutes.
+f_tfResInMinutes(_res) =>
+    // _res: resolution of any TF (in "timeframe.period" string format).
+    request.security(syminfo.tickerid, _res, f_resInMinutes())
+
+// ————— Given current resolution, returns next step of HTF.
+f_resNextStep(_res) =>
+    // _res: current TF in fractional minutes.
+    _res <= 1 ? '15' : _res <= 5 ? '60' : _res <= 30 ? '240' : _res <= 60 ? '1D' : _res <= 360 ? '3D' : _res <= 1440 ? '1W' : _res <= 10080 ? '1M' : '12M'
+
+// ————— Returns a multiple of current resolution as a string in "timeframe.period" format usable with "security()".
+f_multipleOfRes(_res, _mult) =>
+    // _res:  current resolution in minutes, in the fractional format supplied by f_resInMinutes() companion function.
+    // _mult: Multiple of current TF to be calculated.
+    // Convert current float TF in minutes to target string TF in "timeframe.period" format.
+    _targetResInMin = _res * math.max(_mult, 1)
+    // Find best string to express the resolution.
+    _targetResInMin <= 0.083 ? '5S' : _targetResInMin <= 0.251 ? '15S' : _targetResInMin <= 0.501 ? '30S' : _targetResInMin <= 1440 ? str.tostring(math.round(_targetResInMin)) : _targetResInMin <= 43800 ? str.tostring(math.round(math.min(_targetResInMin / 1440, 365))) + 'D' : str.tostring(math.round(math.min(_targetResInMin / 43800, 12))) + 'M'
+
+// ————— Converts a resolution expressed in float minutes into a string usable by "security()".
+// See our FAQ & Code for an example of using this function: http://www.pinecoders.com/faq_and_code/#how-can-i-convert-a-resolution-in-float-minutes-into-a-string-usable-with-security
+f_resFromMinutes(_minutes) =>
+    _minutes <= 0.0167 ? '1S' : _minutes <= 0.0834 ? '5S' : _minutes <= 0.2500 ? '15S' : _minutes <= 0.5000 ? '30S' : _minutes <= 1440 ? str.tostring(math.round(_minutes)) : _minutes <= 43800 ? str.tostring(math.round(math.min(_minutes / 1440, 365))) + 'D' : str.tostring(math.round(math.min(_minutes / 43800, 12))) + 'M'
+
+// Returns the theoretical numbers of current chart bars in the given target HTF resolution (note that this number maybe very different from actual number on certain symbols).
+f_theoreticalDilationOf(_res) =>
+    // _res: resolution of any TF (in "timeframe.period" string format).
+    f_tfResInMinutes(_res) / f_resInMinutes()
+
+// Returns the average number of current chart bars in the given target HTF resolution (this reflects the dataset's history).
+f_avgDilationOf(_res) =>
+    // _res: resolution of any TF (in "timeframe.period" string format).
+    b = ta.barssince(ta.change(time(_res)))
+    cumTotal = ta.cum(b == 0 ? b[1] + 1 : 0)
+    cumCount = ta.cum(b == 0 ? 1 : 0)
+    cumTotal / cumCount
+
+// ————— Print a label at end of chart.
+f_htfLabel(_txt, _y, _color, _offsetLabels) =>
+    _t = int(time + f_resInMinutes() * _offsetLabels * 60000)
+    // Create the label on the dataset's first bar.
+    var _lbl = label.new(_t, _y, _txt, xloc.bar_time, yloc.price, #00000000, label.style_none, color.gray, size.large)
+    if barstate.islast
+        // Rather than delete and recreate the label on every realtime bar update,
+        // simply update the label's information; it's more efficient.
+        label.set_xy(_lbl, _t, _y)
+        label.set_text(_lbl, _txt)
+        label.set_textcolor(_lbl, _color)
+// }
+
+
+// ———————————————————— Calcs
+// {
+// ————— HTF calcs
+var vResInMinutes = f_resInMinutes()
+// Get HTF from user-defined mode.
+var vHtf = vHtfType == vTF1 ? f_resNextStep(vResInMinutes) : vHtfType == vTF2 ? f_multipleOfRes(vResInMinutes, vHtfType2) : vHtfType == vTF3 ? vHtfType3 : timeframe.period
+// ————— Indicator calcs.
+r = ta.rsi(close, rsiLength)
+rHtf = not vHtfOn ? r : vHtfRepaints ? request.security(syminfo.tickerid, vHtf, r) : request.security(syminfo.tickerid, vHtf, r[1], lookahead=barmerge.lookahead_on)
+vHtfSmoothLen = math.max(2, rsiLength / vHtfSmooothFact)
+rHtf := vHtfOn and vHtfSmooth ? ta.ema(ta.ema(ta.ema(rHtf, vHtfSmoothLen), vHtfSmoothLen), vHtfSmoothLen) : rHtf
+
+
+// ———————————————————— Plots
+plot(r, 'Current TF', color.new(color.silver, 0), 2)
+plot(rHtf, 'Higher TF', color.new(color.orange, 70), 6)
+
+if vHtfOn and vResInMinutes >= f_tfResInMinutes(vHtf)
+    f_htfLabel('Chart\nresolution\nmust be < ' + vHtf, ta.sma(r, 10)[1], color.silver, vOffsetLabels)
+else
+    // Show calculated HTF when needed.
+    if vHtfOn and vHtfShow
+        f_htfLabel(vHtf, ta.sma(r, 10)[1], color.silver, vOffsetLabels)
+        // This works well when the script runs in overlay mode: sma(high + 3 * tr, 10)[1]
+
+// Show both theretical and real number of chart bars (dilation) in the selected HTF.
+a = f_theoreticalDilationOf(vHtf)
+b = f_avgDilationOf(vHtf)
+plotchar(a, 'Theoretical dilation', '', location.top)
+plotchar(b, 'Real dilation', '', location.top)
+// }
+
+
+// ———————————————————————————————————————————————————————————————————————————————— 
+// ———————————————————————————————————————————————————————————————————————————————— 
+// —————————— PineCoders MTF Selection Framework functions (COMPACT FORMAT)
+// ———————————————————————————————————————————————————————————————————————————————— 
+// ———————————————————————————————————————————————————————————————————————————————— 
+// f_resInMinutes() => _resInMinutes = timeframe.multiplier * (timeframe.isseconds ? 1. / 60. : timeframe.isminutes ? 1. : timeframe.isdaily ? 1440. : timeframe.isweekly ? 10080. : timeframe.ismonthly ? 43800. : na)
+// f_tfResInMinutes(_resolution) => security(syminfo.tickerid, _resolution, f_resInMinutes())
+// f_resNextStep(_res) => _res <= 1 ? "15" : _res <= 5 ? "60"  : _res <= 30 ? "240" : _res <= 60 ? "1D" : _res <= 360 ? "3D" : _res <= 1440 ? "1W" : _res <= 10080 ? "1M" : "12M"
+// f_multipleOfRes(_res, _mult) => _targetResInMin = _res * max(_mult, 1), _targetResInMin <= 0.083 ? "5S" : _targetResInMin <= 0.251 ? "15S" : _targetResInMin <= 0.501 ? "30S" : _targetResInMin <= 1440 ? tostring(round(_targetResInMin)) : _targetResInMin <= 43800 ? tostring(round(min(_targetResInMin / 1440, 365))) + "D" : tostring(round(min(_targetResInMin / 43800, 12))) + "M"
+// f_resFromMinutes(_minutes) => _minutes <= 0.0167 ? "1S" : _minutes <= 0.0834 ? "5S" : _minutes <= 0.2500 ? "15S" : _minutes <= 0.5000 ? "30S" : _minutes <= 1440 ? tostring(round(_minutes)) : _minutes <= 43800 ? tostring(round(min(_minutes / 1440, 365))) + "D" : tostring(round(min(_minutes / 43800, 12))) + "M"
+// f_theoreticalDilationOf(_res) => f_tfResInMinutes(_res) / f_resInMinutes()
+// f_avgDilationOf(_res) => b = barssince(change(time(_res))), cumTotal = cum(b == 0 ? b[1] + 1 : 0), cumCount = cum(b == 0 ? 1 : 0), cumTotal / cumCount
+// f_htfLabel(_txt, _y, _color, _offsetLabels) => 
+//     _t = int(time + (f_resInMinutes() * _offsetLabels * 60000)), var _lbl = label.new(_t, _y, _txt, xloc.bar_time, yloc.price, #00000000, label.style_none, color.gray, size.large), if barstate.islast
+//         label.set_xy(_lbl, _t, _y), label.set_text(_lbl, _txt), label.set_textcolor(_lbl, _color)
+

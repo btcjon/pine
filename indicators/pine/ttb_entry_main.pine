@@ -1,0 +1,1012 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © thetradingbot
+// TTB entry signal system
+
+
+//@version=5
+indicator("TTB Entry Main", shorttitle="TTB Entry Main", overlay=true)
+
+// for MTF super
+import DarkWaveAlgo/DarkWaveColorThemes/1 as ColorThemes
+
+//*****************************
+
+
+
+//ULT RSI Functions inputs
+group_ult_rsi_inputs_title = "ULT RSI Inputs"
+ult_rsi_length = input.int(30, minval = 2, group=group_ult_rsi_inputs_title)
+ult_rsi_smoType1 = input.string('TMA', 'Method', options = ['EMA', 'SMA', 'RMA', 'TMA'], group=group_ult_rsi_inputs_title)
+ult_rsi_src = input(close, 'Source', group=group_ult_rsi_inputs_title)
+//ult_rsi_arsiCss = input(color.silver, 'Color', inline = 'rsicss', group=group_ult_rsi_inputs_title)
+//ult_rsi_autoCss = input(true, 'Auto', inline = 'rsicss', group=group_ult_rsi_inputs_title)
+ult_rsi_smooth = input.int(30, minval = 1, group = 'ULT RSI Signal Line', group=group_ult_rsi_inputs_title)
+ult_rsi_smoType2 = input.string('TMA', 'Method', options = ['EMA', 'SMA', 'RMA', 'TMA'], group = 'ULT RSI Signal Line', group=group_ult_rsi_inputs_title)
+//ult_rsi_signalCss = input(#ff5d00, 'Color', group = 'Signal Line', group=group_ult_rsi_inputs_title)
+ult_rsi_ob = input.int(92, 'Overbought Level', group=group_ult_rsi_inputs_title)
+ult_rsi_os = input.int(8, 'Oversold Level', group=group_ult_rsi_inputs_title)
+ult_rsi_ob_thresh = input.int(80, 'Entry Overbought Thresh', group=group_ult_rsi_inputs_title)
+ult_rsi_os_thresh = input.int(20, 'Entry Oversold Thresh', group=group_ult_rsi_inputs_title)
+
+//ULT RSI2 Functions inputs
+group_ult_rsi_inputs_title2 = "ULT RSI2 Inputs"
+ult_rsi_length2 = input.int(20, minval = 2, group=group_ult_rsi_inputs_title2)
+ult_rsi_smoType12 = input.string('TMA', 'Method', options = ['EMA', 'SMA', 'RMA', 'TMA'], group=group_ult_rsi_inputs_title2)
+ult_rsi_src2 = input(close, 'Source', group=group_ult_rsi_inputs_title2)
+//ult_rsi_arsiCss2 = input(color.silver, 'Color', inline = 'rsicss', group=group_ult_rsi_inputs_title2)
+//ult_rsi_autoCss2 = input(true, 'Auto', inline = 'rsicss', group=group_ult_rsi_inputs_title2)
+ult_rsi_smooth2 = input.int(20, minval = 1, group = 'ULT RSI Signal Line', group=group_ult_rsi_inputs_title2)
+ult_rsi_smoType22 = input.string('TMA', 'Method', options = ['EMA', 'SMA', 'RMA', 'TMA'], group = 'ULT RSI Signal Line', group=group_ult_rsi_inputs_title2)
+//ult_rsi_signalCss2 = input(#ff5d00, 'Color', group = 'Signal Line', group=group_ult_rsi_inputs_title2)
+ult_rsi_ob2 = input.int(80, 'Overbought Level', group=group_ult_rsi_inputs_title2)
+ult_rsi_os2 = input.int(20, 'Oversold Level', group=group_ult_rsi_inputs_title2)
+ult_rsi_ob_thresh2 = input.int(65, 'Entry Overbought Thresh', group=group_ult_rsi_inputs_title2)
+ult_rsi_os_thresh2 = input.int(35, 'Entry Oversold Thresh', group=group_ult_rsi_inputs_title2)
+
+
+// Waddah Inputs
+group1_title = "Waddah Inputs"
+sensitivity = input(150, title="Sensitivity", group=group1_title)
+fastLength=input(15, title="FastEMA Length", group=group1_title)
+slowLength=input(30, title="SlowEMA Length", group=group1_title)
+channelLength=input(20, title="BB Channel Length", group=group1_title)
+WBBmult=input(2.0, title="BB Stdev Multiplier", group=group1_title)
+//Waddah Dead Zone calculation
+DEAD_ZONE = nz(ta.rma(ta.tr(true),100)) * 3.7
+
+
+//ADX inputs
+group3_title = "ADX Inputs"
+adx_threshold = input(25, title="ADX Threshold", group=group3_title)
+adxlen = input(14, title="ADX Smoothing", group=group3_title)
+dilen = input(14, title="DI Length", group=group3_title)
+
+//Squeeze Inputs
+group4_title = "Squeeze Inputs"
+sqz_length = input.int(5, "TTM Squeeze Length", group=group4_title)
+
+//KELTNER CHANNELS (Squeeze) inputs
+group5_title = "Keltner Channels Inputs"
+KC_mult_high = input.float(1.0, "Keltner Channel #1", group=group5_title)
+KC_mult_mid = input.float(1.5, "Keltner Channel #2", group=group5_title)
+KC_mult_low = input.float(2.0, "Keltner Channel #3", group=group5_title)
+
+//BOLLINGER BANDS (Squeeze) input
+group6_title = "Bollinger Bands Inputs"
+BB_mult = input.float(2.0, "Bollinger Band STD Multiplier", group=group6_title)
+
+
+// Trend Follower Inputs
+group_trend_follower_inputs_title = "Trend Follower Inputs"
+matype= input.string('SMA', title = "MA Type", options =['EMA', 'SMA', 'RMA', 'WMA', 'VWMA'], group=group_trend_follower_inputs_title)
+prd = input.int(15, title = "Period to Check Trend", minval = 5, group=group_trend_follower_inputs_title)
+maprd = input.int(400, title = "MA Period", minval = 2, group=group_trend_follower_inputs_title)
+rateinp = input.float(1, title = "Trend Channel Rate %", minval = 0.1, step = 0.1, group=group_trend_follower_inputs_title)
+ulinreg = input(true, title = "Use Linear Regression", group=group_trend_follower_inputs_title)
+linprd = input.int(5, title = "Linear Regression Period", minval = 2, group=group_trend_follower_inputs_title)
+rate = rateinp / 100
+pricerange = ta.highest(280) - ta.lowest(280)
+
+
+
+//TD show hide
+showBuyTDs = input(false, title="Show TD Buy")
+showSellTDs = input(false, title="Show TD Sell")
+
+
+
+
+//Vix Fix lows inputs
+// Vix Fix Colors (low)
+Black   = #000000,      Charcoal= #363A45,      Gray    = #787B86,      Silver  = #C0C0C0,      White   = #FFFFFF
+Brown   = #A52A2A,      Red     = #FF0000,      Pink    = #FF69B4,      Gold    = #D4AF37,      Orange  = #FF6A00,      Yellow  = #FFFF00
+Green   = #00AF00,      Teal    = #008080,      Lime    = #00FF0B       // Green = #008000
+Navy    = #311BB2,      Blue    = #0094FF,      Aqua    = #00BCD4       // #2962FF #00FFFF
+Purple  = #800080,      Fucshia = #E040FB   //#FF00FF
+None = color.new(Black, 100)
+// Vix Fix Colors (high)
+H_Black   = #000000,      H_Charcoal= #363A45,      H_Gray    = #787B86,      H_Silver  = #C0C0C0,      H_White   = #FFFFFF
+H_Brown   = #A52A2A,      H_Red     = #FF0000,      H_Pink    = #FF69B4,      H_Gold    = #D4AF37,      H_Orange  = #FF6A00,      H_Yellow  = #FFFF00
+H_Green   = #00AF00,      H_Teal    = #008080,      H_Lime    = #00FF0B       // Green = #008000
+H_Navy    = #311BB2,      H_Blue    = #0094FF,      H_Aqua    = #00BCD4       // #2962FF #00FFFF
+H_Purple  = #800080,      H_Fucshia = #E040FB   //#FF00FF
+H_None = color.new(Black, 100)
+//
+// Vix Fix Lows Inputs
+group7_title = "Vix Fix Lows"
+bHighs = input(false, title='Highs not lows', group=group7_title)
+//bFlip  = input(false, title='Flip Indicator', group=group7_title)
+//Flip   = bFlip ? -1 : 1
+pd   = input(22, title='LookBack Period Standard Deviation High', group=group7_title)
+bbl  = input(20, title='Bolinger Band', group=group7_title)                  //title='Bolinger Band Length'
+mult = input.float(2.0, minval=1, maxval=5, title='', group=group7_title)   //title='Bollinger Band Standard Devaition Up'
+lb   = input(50,   title='Look Back Period Percentile High', group=group7_title)
+ph   = input(0.85, title='Highest Percentile - 0.90=90%, 0.95=95%, 0.99=99%', group=group7_title)
+pl   = input(1.01, title='Lowest Percentile - 1.10=90%, 1.05=95%, 1.01=99%', group=group7_title)
+hp = input(false, title='Plot High/Low Ranges', group=group7_title)
+sd = input(false, title='Plot Standard Deviation', group=group7_title)
+col_Entry = input.color(Fucshia, "", group=group7_title)
+bSbc      = input(true, title='Highlight Bars For Simple Entry', group=group7_title)
+col_AboveLines = Lime // input.color(Lime, "", group=group7_title)
+bSbcc          = input(false, title='Highlight Bars if WVF IS True', group=group7_title)    
+// input(false, title='Highlight Bars if WVF IS True', group=group7_title)
+col_Filt   = input.color(H_White, "", group=group7_title)
+bSbcFilt   = input(true,  title='Highlight Bars For Filtered Entry', group=group7_title)
+// bLabelFilt = input(false, title='Label', group=group7_title)            // Nevermind this label input, this is useless since it won't draw a label on the price chart, up to you if you want to code it so it will
+col_Aggr   = input.color(Yellow, "", group=group7_title)
+bSbcAggr   = input(false, title='Highlight Bars For Aggressive Filtered Entry', group=group7_title)
+// bLabelAggr = input(false, title='Label', group=group7_title)          // Nevermind this label input, this is useless since it won't draw a label on the price chart, up to you if you want to code it so it will
+col_AllBars = input.color(Gray, "", group=group7_title)
+bSgb        = input(false, title='Color all bars except signals', group=group7_title)
+// Criteria for Down Trend Definition for Filtered Pivots and Aggressive Filtered Pivots
+ltLB = input.int(40, minval=25, maxval=99, title='L_Long-Term Look Back Current Bar Has To Close Below This Value OR Medium Term--Default=40', group=group7_title)
+mtLB = input.int(14, minval=10, maxval=20, title='L_Medium-Term Look Back Current Bar Has To Close Below This Value OR Long Term--Default=14', group=group7_title)
+str  = input.int(3,  minval=1,  maxval=9,  title='L_Entry Price Action Strength--Close > X Bars Back---Default=3', group=group7_title)
+swvf = false     // input(true, title='L_Show Williams Vix Fix Histogram, Uncheck to Turn Off!', group=group7_title)
+
+
+// Vix Fix Highs Inputs
+group8_title = "Vix Fix Highs"
+HIGHbHighs = input(true, title='Highs not lows', group=group8_title)
+//bFlip  = input(false, title='Flip Indicator', group=group8_title)
+//Flip   = bFlip ? -1 : 1
+HIGHpd   = input(22, title='LookBack Period Standard Deviation High', group=group8_title)
+HIGHbbl  = input(20, title='Bolinger Band', group=group8_title)                  //title='Bolinger Band Length'
+HIGHmult = input.float(2.0, minval=1, maxval=5, title='', group=group8_title)   //title='Bollinger Band Standard Devaition Up'
+HIGHlb   = input(50,   title='Look Back Period Percentile High', group=group8_title)
+HIGHph   = input(0.85, title='Highest Percentile - 0.90=90%, 0.95=95%, 0.99=99%', group=group8_title)
+HIGHpl   = input(1.01, title='Lowest Percentile - 1.10=90%, 1.05=95%, 1.01=99%', group=group8_title)
+HIGHhp = input(false, title='Plot High/Low Ranges', group=group8_title)
+HIGHsd = input(false, title='Plot Standard Deviation', group=group8_title)
+HIGHcol_Entry = input.color(H_Fucshia, "", group=group8_title)
+HIGHbSbc      = input(true, title='Highlight Bars For Simple Entry', group=group8_title)
+HIGHcol_AboveLines = Lime // input.color(Lime, "", group=group8_title)
+HIGHbSbcc          = input(false, title='Highlight Bars if WVF IS True', group=group8_title)    
+// input(false, title='Highlight Bars if WVF IS True', group=group8_title)
+HIGHcol_Filt   = input.color(H_White, "", group=group8_title)
+HIGHbSbcFilt   = input(true,  title='Highlight Bars For Filtered Entry', group=group8_title)
+// bLabelFilt = input(false, title='Label', group=group8_title)            // Nevermind this label input, this is useless since it won't draw a label on the price chart, up to you if you want to code it so it will
+HIGHcol_Aggr   = input.color(H_Yellow, "", group=group8_title)
+HIGHbSbcAggr   = input(false, title='Highlight Bars For Aggressive Filtered Entry', group=group8_title)
+// bLabelAggr = input(false, title='Label', group=group8_title)          // Nevermind this label input, this is useless since it won't draw a label on the price chart, up to you if you want to code it so it will
+HIGHcol_AllBars = input.color(H_Gray, "", group=group8_title)
+HIGHbSgb        = input(false, title='Color all bars except signals', group=group8_title)
+// Criteria for Down Trend Definition for Filtered Pivots and Aggressive Filtered Pivots
+HIGHltLB = input.int(40, minval=25, maxval=99, title='L_Long-Term Look Back Current Bar Has To Close Below This Value OR Medium Term--Default=40', group=group8_title)
+HIGHmtLB = input.int(14, minval=10, maxval=20, title='L_Medium-Term Look Back Current Bar Has To Close Below This Value OR Long Term--Default=14', group=group8_title)
+HIGHstr  = input.int(3,  minval=1,  maxval=9,  title='L_Entry Price Action Strength--Close > X Bars Back---Default=3', group=group8_title)
+HIGHswvf = false     // input(true, title='L_Show Williams Vix Fix Histogram, Uncheck to Turn Off!', group=group8_title)
+
+//*****************************
+
+
+
+
+//*****************************
+
+
+
+// Waddah calculation
+calc_macd(source, fastLength, slowLength) =>
+	fastMA = ta.ema(source, fastLength)
+	slowMA = ta.ema(source, slowLength)
+	fastMA - slowMA
+
+calc_BBUpper(source, length, WBBmult) => 
+	basis = ta.sma(source, length)
+	dev = WBBmult * ta.stdev(source, length)
+	basis + dev
+
+calc_BBLower(source, length, WBBmult) => 
+	basis = ta.sma(source, length)
+	dev = WBBmult * ta.stdev(source, length)
+	basis - dev
+
+waddah_t1 = (calc_macd(close, fastLength, slowLength) - calc_macd(close[1], fastLength, slowLength))*sensitivity
+
+e1 = (calc_BBUpper(close, channelLength, WBBmult) - calc_BBLower(close, channelLength, WBBmult))
+
+trendUp = (waddah_t1 >= 0) ? waddah_t1 : 0
+trendDown = (waddah_t1 < 0) ? (-1*waddah_t1) : 0
+
+
+
+
+//ADX calculation
+dirmov(len) =>
+	up = ta.change(high)
+	down = -ta.change(low)
+	plusDM = na(up) ? na : (up > down and up > 0 ? up : 0)
+	minusDM = na(down) ? na : (down > up and down > 0 ? down : 0)
+	truerange = ta.rma(ta.tr, len)
+	plus = fixnan(100 * ta.rma(plusDM, len) / truerange)
+	minus = fixnan(100 * ta.rma(minusDM, len) / truerange)
+	[plus, minus]
+adx(dilen, adxlen) =>
+	[plus, minus] = dirmov(dilen)
+	sum = plus + minus
+	adx = 100 * ta.rma(math.abs(plus - minus) / (sum == 0 ? 1 : sum), adxlen)
+ADX_sig = adx(dilen, adxlen)
+
+//KELTNER CHANNELS (Squeeze) calculation
+KC_basis = ta.sma(close, sqz_length)
+devKC = ta.sma(ta.tr, sqz_length)
+KC_upper_high = KC_basis + devKC * KC_mult_high
+KC_lower_high = KC_basis - devKC * KC_mult_high
+KC_upper_mid = KC_basis + devKC * KC_mult_mid
+KC_lower_mid = KC_basis - devKC * KC_mult_mid
+KC_upper_low = KC_basis + devKC * KC_mult_low
+KC_lower_low = KC_basis - devKC * KC_mult_low
+
+//BOLLINGER BANDS (Squeeze) calculation
+BB_basis = ta.sma(close, sqz_length)
+bb_dev = BB_mult * ta.stdev(close, sqz_length)
+BB_upper = BB_basis + bb_dev
+BB_lower = BB_basis - bb_dev
+
+
+//SQUEEZE CONDITIONS
+NoSqz = BB_lower < KC_lower_low or BB_upper > KC_upper_low //NO SQUEEZE: GREEN
+LowSqz = BB_lower >= KC_lower_low or BB_upper <= KC_upper_low //LOW COMPRESSION: BLACK
+MidSqz = BB_lower >= KC_lower_mid or BB_upper <= KC_upper_mid //MID COMPRESSION: RED
+HighSqz = BB_lower >= KC_lower_high or BB_upper <= KC_upper_high //HIGH COMPRESSION: ORANGE
+
+//Squeeze MOMENTUM OSCILLATOR
+mom = ta.linreg(close - math.avg(math.avg(ta.highest(high, sqz_length), ta.lowest(low, sqz_length)), ta.sma(close, sqz_length)), sqz_length, 0)
+
+//Squeeze MOMENTUM HISTOGRAM COLOR
+iff_1 = mom > nz(mom[1]) ? color.new(color.aqua, 0) : color.new(#2962ff, 0)
+iff_2 = mom < nz(mom[1]) ? color.new(color.red, 0) : color.new(color.yellow, 0)
+mom_color = mom > 0 ? iff_1 : iff_2
+
+
+
+//ULT RSI calculations
+ult_rsi_ma(x, len, maType)=>
+    switch maType
+        'EMA' => ta.ema(x, len)
+        'SMA' => ta.sma(x, len) 
+        'RMA' => ta.rma(x, len) 
+        'TMA' => ta.sma(ta.sma(x, len), len)
+ult_rsi_upper = ta.highest(ult_rsi_src, ult_rsi_length)
+ult_rsi_lower = ta.lowest(ult_rsi_src, ult_rsi_length)
+ult_rsi_r = ult_rsi_upper - ult_rsi_lower
+
+ult_rsi_d = ult_rsi_src - ult_rsi_src[1]
+ult_rsi_diff = ult_rsi_upper > ult_rsi_upper[1] ? ult_rsi_r 
+  : ult_rsi_lower < ult_rsi_lower[1] ? -ult_rsi_r 
+  : ult_rsi_d
+
+ult_rsi_num = ult_rsi_ma(ult_rsi_diff, ult_rsi_length, ult_rsi_smoType1)
+ult_rsi_den = ult_rsi_ma(math.abs(ult_rsi_diff), ult_rsi_length, ult_rsi_smoType1)
+ult_rsi_arsi = ult_rsi_num / ult_rsi_den * 50 + 50
+
+ult_rsi_signal = ult_rsi_ma(ult_rsi_arsi, ult_rsi_smooth, ult_rsi_smoType2)
+
+//ULT RSI2 calculations
+ult_rsi_ma2(x2, len2, maType2)=>
+    switch maType2
+        'EMA' => ta.ema(x2, len2)
+        'SMA' => ta.sma(x2, len2) 
+        'RMA' => ta.rma(x2, len2) 
+        'TMA' => ta.sma(ta.sma(x2, len2), len2)
+ult_rsi_upper2 = ta.highest(ult_rsi_src2, ult_rsi_length2)
+ult_rsi_lower2 = ta.lowest(ult_rsi_src2, ult_rsi_length2)
+ult_rsi_r2 = ult_rsi_upper2 - ult_rsi_lower2
+
+ult_rsi_d2 = ult_rsi_src2 - ult_rsi_src2[1]
+ult_rsi_diff2 = ult_rsi_upper2 > ult_rsi_upper2[1] ? ult_rsi_r2 
+  : ult_rsi_lower2 < ult_rsi_lower2[1] ? -ult_rsi_r2 
+  : ult_rsi_d2
+
+ult_rsi_num2 = ult_rsi_ma2(ult_rsi_diff2, ult_rsi_length2, ult_rsi_smoType12)
+ult_rsi_den2 = ult_rsi_ma2(math.abs(ult_rsi_diff2), ult_rsi_length2, ult_rsi_smoType12)
+ult_rsi_arsi2 = ult_rsi_num2 / ult_rsi_den2 * 50 + 50
+
+ult_rsi_signal2 = ult_rsi_ma2(ult_rsi_arsi2, ult_rsi_smooth2, ult_rsi_smoType22)
+
+
+
+// Trend Follower calculation
+chan = pricerange * rate
+    
+gettrendfollow(len)=>
+    masrc = matype == 'EMA' ? ta.ema(close, len) : matype == 'RMA' ? ta.rma(close, len) : matype == 'VWMA' ? ta.vwma(close, len) : matype == 'WMA' ? ta.wma(close, len) : ta.sma(close, len)
+    ma = ulinreg ? ta.linreg(masrc, linprd, 0) : masrc
+    
+    hh = ta.highest(ma, prd)
+    ll = ta.lowest(ma, prd)
+    diff = math.abs(hh - ll)
+    
+    trendfollow = diff > chan ? ma > ll + chan ? 1 : ma < hh - chan ? -1 : 0 : 0
+    _ret = trendfollow * diff / chan
+    _ret
+
+trendfollow = gettrendfollow(maprd)
+
+trendchanged = trendfollow - nz(trendfollow[1])
+tcol =  trendfollow > 0 ? trendchanged> 0 ? #00FF00ff : trendchanged <= 0 ? #00FF006f : #00FF00af :
+   trendfollow < 0 ? trendchanged < 0 ? #FF0000ff: trendchanged >= 0 ? #FF00006f : #FF0000af : na
+
+
+
+
+// TD Calculation
+TDbuySignals = 0
+TDbuySignals := (close < close[4]) ? TDbuySignals[1] == 9 ? 1 : TDbuySignals[1] + 1 : 0
+
+TDsellSignals = 0
+TDsellSignals := (close > close[4]) ? TDsellSignals[1] == 9 ? 1 : TDsellSignals[1] + 1 : 0
+
+TDBuyOrSell = TDbuySignals > TDsellSignals ? TDbuySignals : TDsellSignals
+
+TD8buy = showBuyTDs and TDbuySignals and TDBuyOrSell == 8
+TD9buy = showBuyTDs and TDbuySignals and TDBuyOrSell == 9
+
+TD8sell = showSellTDs and TDsellSignals and TDBuyOrSell == 8
+TD9sell = showSellTDs and TDsellSignals and TDBuyOrSell == 9
+
+TDbuycondition9 = TDbuySignals[1] == 9
+TDsellcondition9 = TDsellSignals[1] == 9
+
+//Vix Fix lows calculations
+// Williams Vix Fix Formula
+wvf = bHighs ? (((ta.lowest(close, pd)-high)/(ta.lowest(close, pd))) * 100) : 
+  ((ta.highest(close, pd) - low) / ta.highest(close, pd) * 100)
+sDev = mult * ta.stdev(wvf, bbl)
+midLine = ta.sma(wvf, bbl)
+lowerBand = midLine - sDev
+upperBand = midLine + sDev
+rangeHigh = bHighs ? ta.highest(wvf, lb) * pl    :   ta.highest(wvf, lb) * ph
+rangeLow  = bHighs ? ta.lowest (wvf, lb) * ph    :   ta.lowest (wvf, lb) * pl
+// Filtered Bar Criteria
+upRange = low > low[1]   and close > high[1]
+upRange_Aggr = close > close[1] and close > open[1]
+dnRange = high < high[1] and close < low[1]
+dnRange_Aggr = close < close[1] and close < open[1]
+// Filtered Criteria
+bFiltered      = (not bHighs and (wvf[1] >= upperBand[1] or wvf[1] >= rangeHigh[1]) and wvf < upperBand and wvf < rangeHigh) or 
+                     (bHighs and (wvf[1] <= lowerBand[1] or wvf[1] <= rangeLow[1])  and wvf > lowerBand and wvf > rangeLow)
+
+bFiltered_Aggr = (not bHighs and (wvf[1] >= upperBand[1] or wvf[1] >= rangeHigh[1]) and not(wvf < upperBand and wvf < rangeHigh)) or 
+                     (bHighs and (wvf[1] <= lowerBand[1] or wvf[1] <= rangeLow[1])  and not(wvf > lowerBand and wvf > rangeLow))
+// Alerts Criteria
+alert1 = wvf >= upperBand or wvf >= rangeHigh ? 1 : 0
+alert2 = bFiltered ? 1 : 0
+alert3 = (not bHighs and upRange and close > close[str] and (close < close[ltLB] or close < close[mtLB]) and bFiltered) or
+             (bHighs and dnRange and close < close[str] and (close > close[ltLB] or close > close[mtLB]) and bFiltered) ? 1 : 0
+alert4 = (not bHighs and upRange_Aggr and close > close[str] and (close < close[ltLB] or close < close[mtLB]) and bFiltered_Aggr) or
+             (bHighs and dnRange_Aggr and close < close[str] and (close > close[ltLB] or close > close[mtLB]) and bFiltered_Aggr)? 1 : 0
+// Criteria     Usually I would just write the values into the barcolor function but I want to use these later for the labels
+Criteria_Aggressive  = bSbcAggr and alert4
+Criteria_Filtered    = bSbcFilt and alert3
+Criteria_Entry       = bSbc     and bFiltered
+Criteria_AboveLines  = bSbcc    and (wvf >= upperBand or wvf >= rangeHigh)
+Criteria_AllBars     = bSgb     and close
+// Highlight Bar Criteria
+barcolor(Criteria_Aggressive ? col_Aggr       : na)     // Highlight bars in this order or else the more aggressive or filtered ones will not draw while a less filtered or non filtered bar is colored over it
+barcolor(Criteria_Filtered   ? col_Filt       : na)
+barcolor(Criteria_Entry      ? col_Entry      : na)
+barcolor(Criteria_AboveLines ? col_AboveLines : na)
+barcolor(Criteria_AllBars    ? col_AllBars    : na)
+// Coloring Criteria of Williams Vix Fix
+bColorBars = (bHighs and wvf <= lowerBand or bHighs and wvf <= rangeLow) or (not bHighs and wvf >= upperBand or not bHighs and wvf >= rangeHigh) ? true : false
+col = bColorBars ? color.new(#00FF00, 35): color.new(color.gray, 35)
+
+
+
+
+// Vix Fix lows Plots for Williams Vix Fix Histogram and Alerts
+plot(na, title='Range High Percentile', style=plot.style_line,    linewidth=4, color=color.new(color.orange, 35))
+plot(na, title='Range Low  Percentile', style=plot.style_line,    linewidth=4, color=color.new(color.orange, 35))
+plot(na, title='Upper Band',            style=plot.style_line,    linewidth=3, color=color.new(color.aqua, 35))
+plot(na, title='Williams Vix Fix',      style=plot.style_columns, linewidth=4, color=col)
+//plot(bColorBars and not bColorBars[1] ? -1 : 0, "Test", White, 2)
+
+GreenBarLookBack  = input.int(1,  minval=1,  title='Number of Green Bars neededd to trigger an alert')
+TestBool = false
+
+for i = 1 to GreenBarLookBack
+    if bColorBars and not bColorBars[i]
+        TestBool := true
+    else
+        TestBool := false
+
+    if TestBool and GreenBarLookBack > 1
+        for j = 1 to i-1
+            if not bColorBars[j]
+                TestBool := false
+                break
+
+// plot(TestBool ? -1 : 0, "Test", White, 2)
+
+
+alertcondition(TestBool, title="Williams Green Bar", message='{{ticker}} Williams Green Bar Signal {{interval}}')
+//
+//
+// END Vix Fix lows calculations
+
+
+// //Vix Fix highs calculations
+HIGHwvf = HIGHbHighs ? (((ta.lowest(close, HIGHpd)-high)/(ta.lowest(close, HIGHpd))) * 100) : 
+  ((ta.highest(close, HIGHpd) - low) / ta.highest(close, HIGHpd) * 100)
+HIGHsDev = HIGHmult * ta.stdev(HIGHwvf, HIGHbbl)
+HIGHmidLine = ta.sma(HIGHwvf, HIGHbbl)
+HIGHlowerBand = HIGHmidLine - HIGHsDev
+HIGHupperBand = HIGHmidLine + HIGHsDev
+HIGHrangeHigh = HIGHbHighs ? ta.highest(HIGHwvf, HIGHlb) * HIGHpl    :   ta.highest(HIGHwvf, HIGHlb) * HIGHph
+HIGHrangeLow  = HIGHbHighs ? ta.lowest (HIGHwvf, HIGHlb) * HIGHph    :   ta.lowest (HIGHwvf, HIGHlb) * HIGHpl
+// Filtered Bar Criteria
+HIGHupRange = low > low[1]   and close > high[1]
+HIGHupRange_Aggr = close > close[1] and close > open[1]
+HIGHdnRange = high < high[1] and close < low[1]
+HIGHdnRange_Aggr = close < close[1] and close < open[1]
+// Filtered Criteria
+HIGHbFiltered      = (not HIGHbHighs and (HIGHwvf[1] >= HIGHupperBand[1] or HIGHwvf[1] >= HIGHrangeHigh[1]) and HIGHwvf < HIGHupperBand and HIGHwvf < HIGHrangeHigh) or 
+                     (HIGHbHighs and (HIGHwvf[1] <= HIGHlowerBand[1] or HIGHwvf[1] <= HIGHrangeLow[1])  and HIGHwvf > HIGHlowerBand and HIGHwvf > HIGHrangeLow)
+
+HIGHbFiltered_Aggr = (not HIGHbHighs and (HIGHwvf[1] >= HIGHupperBand[1] or HIGHwvf[1] >= HIGHrangeHigh[1]) and not(HIGHwvf < HIGHupperBand and HIGHwvf < HIGHrangeHigh)) or 
+                     (HIGHbHighs and (HIGHwvf[1] <= HIGHlowerBand[1] or HIGHwvf[1] <= HIGHrangeLow[1])  and not(HIGHwvf > HIGHlowerBand and HIGHwvf > HIGHrangeLow))
+// Alerts Criteria
+HIGHalert1 = HIGHwvf >= HIGHupperBand or HIGHwvf >= HIGHrangeHigh ? 1 : 0
+HIGHalert2 = HIGHbFiltered ? 1 : 0
+HIGHalert3 = (not HIGHbHighs and HIGHupRange and close > close[HIGHstr] and (close < close[HIGHltLB] or close < close[HIGHmtLB]) and HIGHbFiltered) or
+             (HIGHbHighs and HIGHdnRange and close < close[HIGHstr] and (close > close[HIGHltLB] or close > close[HIGHmtLB]) and HIGHbFiltered) ? 1 : 0
+HIGHalert4 = (not HIGHbHighs and HIGHupRange_Aggr and close > close[HIGHstr] and (close < close[HIGHltLB] or close < close[HIGHmtLB]) and HIGHbFiltered_Aggr) or
+             (HIGHbHighs and HIGHdnRange_Aggr and close < close[HIGHstr] and (close > close[HIGHltLB] or close > close[HIGHmtLB]) and HIGHbFiltered_Aggr)? 1 : 0
+// Criteria     Usually I would just write the values into the barcolor function but I want to use these later for the labels
+HIGHCriteria_Aggressive  = HIGHbSbcAggr and HIGHalert4
+HIGHCriteria_Filtered    = HIGHbSbcFilt and HIGHalert3
+HIGHCriteria_Entry       = HIGHbSbc     and HIGHbFiltered
+HIGHCriteria_AboveLines  = HIGHbSbcc    and (HIGHwvf >= HIGHupperBand or HIGHwvf >= HIGHrangeHigh)
+HIGHCriteria_AllBars     = HIGHbSgb     and close
+// Highlight Bar Criteria
+barcolor(HIGHCriteria_Aggressive ? HIGHcol_Aggr       : na)     // Highlight bars in this order or else the more aggressive or filtered ones will not draw while a less filtered or non filtered bar is colored over it
+barcolor(HIGHCriteria_Filtered   ? HIGHcol_Filt       : na)
+barcolor(HIGHCriteria_Entry      ? HIGHcol_Entry      : na)
+barcolor(HIGHCriteria_AboveLines ? HIGHcol_AboveLines : na)
+barcolor(HIGHCriteria_AllBars    ? HIGHcol_AllBars    : na)
+// Coloring Criteria of Williams Vix Fix
+HIGHbColorBars = (HIGHbHighs and HIGHwvf <= HIGHlowerBand or HIGHbHighs and HIGHwvf <= HIGHrangeLow) or (not HIGHbHighs and HIGHwvf >= HIGHupperBand or not HIGHbHighs and HIGHwvf >= HIGHrangeHigh) ? true : false
+HIGHcol = HIGHbColorBars ? color.new(#00FF00, 35): color.new(color.gray, 35)
+// Plots for Williams Vix Fix Histogram and Alerts
+plot(na, title='Range High Percentile', style=plot.style_line,    linewidth=4, color=color.new(color.orange, 35))
+plot(na, title='Range Low  Percentile', style=plot.style_line,    linewidth=4, color=color.new(color.orange, 35))
+plot(na, title='Upper Band',            style=plot.style_line,    linewidth=3, color=color.new(color.aqua, 35))
+plot(na, title='Williams Vix Fix',      style=plot.style_columns, linewidth=4, color=HIGHcol)
+//plot(HIGHbColorBars and not HIGHbColorBars[1] ? -1 : 0, "Test", White, 2)
+HIGHGreenBarLookBack  = input.int(1,  minval=1,  title='Number of Green Bars neededd to trigger an alert')
+HIGHTestBool = false
+
+for i = 1 to HIGHGreenBarLookBack
+    if HIGHbColorBars and not HIGHbColorBars[i]
+        HIGHTestBool := true
+    else
+        HIGHTestBool := false
+
+    if HIGHTestBool and HIGHGreenBarLookBack > 1
+        for j = 1 to i-1
+            if not HIGHbColorBars[j]
+                HIGHTestBool := false
+                break
+
+// plot(HIGHTestBool ? -1 : 0, "Test", White, 2)
+alertcondition(HIGHTestBool, title="Williams Green Bar", message='{{ticker}} Williams Green Bar Signal {{interval}}')
+//
+// END Vix Fix highs calculations
+
+//*****************************
+
+
+
+
+
+
+//*****************************
+//Squeeze ALERTS
+Detect_Sqz_Start = input.bool(true, "Alert Price Action Squeeze")
+Detect_Sqz_Fire = input.bool(true, "Alert Squeeze Firing")
+
+if Detect_Sqz_Start and NoSqz[1] and not NoSqz
+    alert("Squeeze Started")
+else if Detect_Sqz_Fire and NoSqz and not NoSqz[1]
+    alert("Squeeze Fired")
+
+// Trend Follower alerts
+alertcondition(trendfollow > 0, title = 'Trend is UP', message = 'Trend is UP')
+alertcondition(trendfollow < 0, title = 'Trend is DOWN', message = 'Trend is DOWN')
+alertcondition(trendfollow == 0, title = 'NO TREND', message = 'NO TREND')
+
+
+// TD alerts
+alertcondition(TD8buy, "TD 8 Buy", "TD 8 Buy") // Once per bar close
+alertcondition(TD9buy, "TD 9 Buy", "TD 9 Buy") // Once per bar close
+alertcondition(TD8sell, "TD 8 Sell", "TD 8 Sell") // Once per bar close
+alertcondition(TD9sell, "TD 9 Sell", "TD 9 Sell") // Once per bar close
+
+//*****************************
+
+
+
+//*****************************
+
+//SQUEEZE DOTS COLOR
+sq_color = HighSqz ? color.new(color.orange, 0) : MidSqz ? color.new(color.red, 0) : LowSqz ? color.new(color.black, 0) : color.new(color.green, 0)
+
+//TD Plots
+TDbuycondition = (close < close[4]) ? TDbuySignals[1] == 9 ? 1 : TDbuySignals[1] + 1 : 0
+TDsellcondition = (close > close[4]) ? TDsellSignals[1] == 9 ? 1 : TDsellSignals[1] + 1 : 0
+plot (TDbuycondition, 'TDbuycondition', color=color.new(#ff5252, 100))
+plot (TDsellcondition, 'TDsellcondition', color=color.new(#ff5252, 100))
+
+plotshape(TD8buy, style=shape.labelup,text="8",color=color.new(#4caf4f, 85), textcolor=color.rgb(255, 255, 255, 62), size=size.tiny, location=location.belowbar)
+plotshape(TD9buy, style=shape.labelup,text="9",color=color.new(#4caf4f, 74), textcolor=color.rgb(255, 255, 255, 57), size=size.tiny, location=location.belowbar)
+plotshape(TD8sell, style=shape.labeldown,text="8",color=color.new(#ff5252, 63), textcolor=color.rgb(255, 255, 255, 54), size=size.tiny, location=location.abovebar)
+plotshape(TD9sell, style=shape.labeldown,text="9",color=color.new(#ff5252, 74), textcolor=color.rgb(255, 255, 255, 57), size=size.tiny, location=location.abovebar)
+
+
+//*****************************
+
+
+
+
+// HalfTrend
+amplitude = input(title='Amplitude', defval=20)
+channelDeviation = input(title='Channel Deviation', defval=20)
+showArrows = input(title='Show Arrows', defval=false)
+showChannels = input(title='Show Channels', defval=false)
+
+var int HT_trend = 0
+var int HT_nextTrend = 0
+var float maxLowPrice = nz(low[1], low)
+var float minHighPrice = nz(high[1], high)
+
+var float up = 0.0
+var float down = 0.0
+float atrHigh = 0.0
+float atrLow = 0.0
+float arrowUp = na
+float arrowDown = na
+
+atr2 = ta.atr(100) / 2
+dev = channelDeviation * atr2
+
+highPrice = high[math.abs(ta.highestbars(amplitude))]
+lowPrice = low[math.abs(ta.lowestbars(amplitude))]
+highma = ta.sma(high, amplitude)
+lowma = ta.sma(low, amplitude)
+
+if HT_nextTrend == 1
+    maxLowPrice := math.max(lowPrice, maxLowPrice)
+
+    if highma < maxLowPrice and close < nz(low[1], low)
+        HT_trend := 1
+        HT_nextTrend := 0
+        minHighPrice := highPrice
+        minHighPrice
+else
+    minHighPrice := math.min(highPrice, minHighPrice)
+
+    if lowma > minHighPrice and close > nz(high[1], high)
+        HT_trend := 0
+        HT_nextTrend := 1
+        maxLowPrice := lowPrice
+        maxLowPrice
+
+if HT_trend == 0
+    if not na(HT_trend[1]) and HT_trend[1] != 0
+        up := na(down[1]) ? down : down[1]
+        arrowUp := up - atr2
+        arrowUp
+    else
+        up := na(up[1]) ? maxLowPrice : math.max(maxLowPrice, up[1])
+        up
+    atrHigh := up + dev
+    atrLow := up - dev
+    atrLow
+else
+    if not na(HT_trend[1]) and HT_trend[1] != 1
+        down := na(up[1]) ? up : up[1]
+        arrowDown := down + atr2
+        arrowDown
+    else
+        down := na(down[1]) ? minHighPrice : math.min(minHighPrice, down[1])
+        down
+    atrHigh := down + dev
+    atrLow := down - dev
+    atrLow
+
+ht = HT_trend == 0 ? up : down
+
+var color buyColor = color.blue
+var color sellColor = color.red
+
+htColor = HT_trend == 0 ? buyColor : sellColor
+htPlot = plot(ht, title='HalfTrend', linewidth=2, color=htColor)
+
+atrHighPlot = plot(showChannels ? atrHigh : na, title='ATR High', style=plot.style_circles, color=color.new(sellColor, 0))
+atrLowPlot = plot(showChannels ? atrLow : na, title='ATR Low', style=plot.style_circles, color=color.new(buyColor, 0))
+
+fill(htPlot, atrHighPlot, title='ATR High Ribbon', color=color.new(sellColor, 90))
+fill(htPlot, atrLowPlot, title='ATR Low Ribbon', color=color.new(buyColor, 90))
+
+HT_buySignal = not na(arrowUp) and HT_trend == 0 and HT_trend[1] == 1
+HT_sellSignal = not na(arrowDown) and HT_trend == 1 and HT_trend[1] == 0
+
+
+
+//plotshape(showArrows and buySignal ? atrLow : na, title='Arrow Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(buyColor, 0))
+//plotshape(showArrows and sellSignal ? atrHigh : na, title='Arrow Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(sellColor, 0))
+
+//alertcondition(HT_buySignal, title='Alert: HalfTrend Buy', message='HalfTrend Buy')
+//alertcondition(HT_sellSignal, title='Alert: HalfTrend Sell', message='HalfTrend Sell')
+
+
+
+
+//  VSLRT
+src = input(defval=close, title='Source')
+len1 = input.int(defval=7, title='Short Term Length', minval=5)
+len2 = input.int(defval=14, title='Long Term Length', minval=5)
+
+ccol11 = input(defval = #00FF00ff, title = "Column Colors", inline = "gr1")
+ccol12 = input(defval = #00BC00, title = "", inline = "gr1")
+ccol13 = input(defval = #00FF006f, title = "", inline = "gr1")
+ccol21 = input(defval = #FF0000ff, title = "", inline = "gr1")
+ccol22 = input(defval = #BF0000, title = "", inline = "gr1")
+ccol23 = input(defval = #FF00006f, title = "", inline = "gr1")
+col11 = input(defval = #008EFF, title = "Line Colors", inline = "gr2")
+col12 = input(defval = #006ec5, title = "", inline = "gr2")
+col13 = input(defval = #024478, title = "", inline = "gr2")
+col21 = input(defval = #fd9701, title = "", inline = "gr2")
+col22 = input(defval = #CE7A00, title = "", inline = "gr2")
+col23 = input(defval = #663d00, title = "", inline = "gr2")
+
+// get short/long-term regression slope
+slope_price = ta.linreg(src, len1, 0) - ta.linreg(src, len1, 1)
+slope_price_lt = ta.linreg(src, len2, 0) - ta.linreg(src, len2, 1)
+
+// get the size of top/bottom/body of the candle
+tw = high - math.max(open, close)
+bw = math.min(open, close) - low
+body = math.abs(close - open)
+
+//Calculate Buy/Sell Volume
+_rate(cond) =>
+    ret = 0.5 * (tw + bw + (cond ? 2 * body : 0)) / (tw + bw + body)
+    ret := na(ret) ? 0.5 : ret
+    ret
+
+// Calculate Regression Slope for Buy/Sell Volumes
+_get_trend(len) =>
+    deltaup = volume * _rate(open <= close)
+    deltadown = volume * _rate(open > close)
+
+    slope_volume_up = ta.linreg(deltaup, len, 0) - ta.linreg(deltaup, len, 1)
+    slope_volume_down = ta.linreg(deltadown, len, 0) - ta.linreg(deltadown, len, 1)
+    [slope_volume_up, slope_volume_down]
+
+// get buy/sell volume regression slopes for short term period
+[slope_volume_up, slope_volume_down] = _get_trend(len1)
+
+// coloring columns
+column_col = slope_price > 0 ? slope_volume_up > 0 ? slope_volume_up > slope_volume_down ? ccol11 : ccol12 : ccol13 : slope_price < 0 ? slope_volume_down > 0 ? slope_volume_up < slope_volume_down ? ccol21 : ccol22 : ccol23 : color.gray
+
+// get buy/sell volume regression slopes for long term period
+[slope_volume_up_lt, slope_volume_down_lt] = _get_trend(len2)
+
+// coloring columns
+column_col := slope_price_lt > 0 ? slope_volume_up_lt > 0 ? slope_volume_up_lt > slope_volume_down_lt ? col11 : col12 : col13 : slope_price_lt < 0 ? slope_volume_down_lt > 0 ? slope_volume_up_lt < slope_volume_down_lt ? col21 : col22 : col23 : color.gray
+// short term trend
+//plot(slope_price * len1, color=column_col, style=plot.style_columns)
+// Long term trend
+//plot(slope_price_lt * len2, color=column_col, linewidth=3)
+
+
+
+//  VSLRT Long Term
+//src = input(defval=close, title='Source')
+VSLRT_LT_len1 = input.int(defval=150, title='Short Term Length', minval=5)
+VSLRT_LT_len2 = input.int(defval=300, title='Long Term Length', minval=5)
+
+VSLRT_LT_ccol11 = input(defval = #00FF00ff, title = "Column Colors", inline = "gr1")
+VSLRT_LT_ccol12 = input(defval = #00BC00, title = "", inline = "gr1")
+VSLRT_LT_ccol13 = input(defval = #00FF006f, title = "", inline = "gr1")
+VSLRT_LT_ccol21 = input(defval = #FF0000ff, title = "", inline = "gr1")
+VSLRT_LT_ccol22 = input(defval = #BF0000, title = "", inline = "gr1")
+VSLRT_LT_ccol23 = input(defval = #FF00006f, title = "", inline = "gr1")
+VSLRT_LT_col11 = input(defval = #008EFF, title = "Line Colors", inline = "gr2")
+VSLRT_LT_col12 = input(defval = #006ec5, title = "", inline = "gr2")
+VSLRT_LT_col13 = input(defval = #024478, title = "", inline = "gr2")
+VSLRT_LT_col21 = input(defval = #fd9701, title = "", inline = "gr2")
+VSLRT_LT_col22 = input(defval = #CE7A00, title = "", inline = "gr2")
+VSLRT_LT_col23 = input(defval = #663d00, title = "", inline = "gr2")
+
+// get short/long-term regression slope
+VSLRT_LT_slope_price = ta.linreg(src, VSLRT_LT_len1, 0) - ta.linreg(src, VSLRT_LT_len1, 1)
+VSLRT_LT_slope_price_lt = ta.linreg(src, VSLRT_LT_len2, 0) - ta.linreg(src, VSLRT_LT_len2, 1)
+
+// get the size of top/bottom/body of the candle
+VSLRT_LT_tw = high - math.max(open, close)
+VSLRT_LT_bw = math.min(open, close) - low
+VSLRT_LT_body = math.abs(close - open)
+
+//Calculate Buy/Sell Volume
+VSLRT_LT__rate(cond) =>
+    ret = 0.5 * (VSLRT_LT_tw + VSLRT_LT_bw + (cond ? 2 * VSLRT_LT_body : 0)) / (VSLRT_LT_tw + VSLRT_LT_bw + VSLRT_LT_body)
+    ret := na(ret) ? 0.5 : ret
+    ret
+
+// Calculate Regression Slope for Buy/Sell Volumes
+VSLRT_LT__get_trend(len) =>
+    deltaup = volume * VSLRT_LT__rate(open <= close)
+    deltadown = volume * VSLRT_LT__rate(open > close)
+
+    VSLRT_LT_slope_volume_up = ta.linreg(deltaup, len, 0) - ta.linreg(deltaup, len, 1)
+    VSLRT_LT_slope_volume_down = ta.linreg(deltadown, len, 0) - ta.linreg(deltadown, len, 1)
+    [VSLRT_LT_slope_volume_up, VSLRT_LT_slope_volume_down]
+
+// get buy/sell volume regression slopes for short term period
+[VSLRT_LT_slope_volume_up, VSLRT_LT_slope_volume_down] = VSLRT_LT__get_trend(VSLRT_LT_len1)
+
+// coloring columns
+VSLRT_LT_column_col = VSLRT_LT_slope_price > 0 ? VSLRT_LT_slope_volume_up > 0 ? VSLRT_LT_slope_volume_up > VSLRT_LT_slope_volume_down ? VSLRT_LT_ccol11 : VSLRT_LT_ccol12 : VSLRT_LT_ccol13 : VSLRT_LT_slope_price < 0 ? VSLRT_LT_slope_volume_down > 0 ? VSLRT_LT_slope_volume_up < VSLRT_LT_slope_volume_down ? VSLRT_LT_ccol21 : VSLRT_LT_ccol22 : VSLRT_LT_ccol23 : color.gray
+
+// get buy/sell volume regression slopes for long term period
+[VSLRT_LT_slope_volume_up_lt, VSLRT_LT_slope_volume_down_lt] = VSLRT_LT__get_trend(VSLRT_LT_len2)
+
+// coloring columns
+VSLRT_LT_column_col := VSLRT_LT_slope_price_lt > 0 ? VSLRT_LT_slope_volume_up_lt > 0 ? VSLRT_LT_slope_volume_up_lt > VSLRT_LT_slope_volume_down_lt ? VSLRT_LT_col11 : VSLRT_LT_col12 : VSLRT_LT_col13 : VSLRT_LT_slope_price_lt < 0 ? VSLRT_LT_slope_volume_down_lt > 0 ? VSLRT_LT_slope_volume_up_lt < VSLRT_LT_slope_volume_down_lt ? VSLRT_LT_col21 : VSLRT_LT_col22 : VSLRT_LT_col23 : color.gray
+// short term trend
+//plot(slope_price * len1, color=column_col, style=plot.style_columns)
+// Long term trend
+//plot(slope_price_lt * len2, color=column_col, linewidth=3)
+
+
+// MTF SuperTrend
+
+getSize(string sizeString) =>
+    t = sizeString == "Auto" ? size.auto : sizeString == "Huge" ? size.huge : sizeString == "Large" ? size.large : sizeString == "Normal" ? size.normal : sizeString == "Small" ? size.small : sizeString == "Tiny" ? size.tiny : na  
+
+_tfString(tf) =>
+    str = "Chart"
+    if (str.contains(tf, "H") or  (str.contains(tf, "S")) or (str.contains(tf, "D")) or (str.contains(tf, "W")) or (str.contains(tf, "M")))
+        str := tf
+    else if (not na(str.tonumber(tf)))
+        str := tf == '180' ? "3h" : tf == '240' ? "4h" : tf == '480' ? "8h" : tf == '120' ? "2h" : tf == '60' ? "1h" : tf + "m"
+
+tfString(tf) =>
+    str = "Chart"
+    if (str.contains(tf, "H") or  (str.contains(tf, "S")) or (str.contains(tf, "D")) or (str.contains(tf, "W")) or (str.contains(tf, "M")))
+        str := tf
+    else if (not na(str.tonumber(tf)))
+        str := tf == '180' ? "3h" : tf == '240' ? "4h" : tf == '480' ? "8h" : tf == '120' ? "2h" : tf == '60' ? "1h" : tf + "m"
+    else 
+        str := _tfString(timeframe.period)
+
+enableColorTheme = input.bool(true, "✅ Use a Color Theme", group="🌊 Global Input Settings 🌊")
+selectedColorTheme = input.string("DarkWave Crypto", "  🎨 Color Theme", options=['DarkWave', 'Synthwave', 'DarkWave Crypto', 'Crystal Pool', 'Aquafarer', 'Mystic Armor', 
+  'Futurist', 'Electric Zest', 'Stealth Ride', 'Long Trader', 'Short Trader', 'Emerald Glow', 'Gold Heist', 'Floral', 'Cobalt Twilight', 'Sunrise'], group="🌊 Global Input Settings 🌊")
+fill_SuperTrends = input.bool(true, "✅ Fill SuperTrend Areas", group = "🌊 Global Input Settings 🌊")
+hideLowerTimeframes = input.bool(true, "✅ Hide SuperTrends on Timeframes Lower Than the Chart", group="🌊 Global Input Settings 🌊")
+
+color bullishColor = #00d5bfff
+color bearishColor = #c2185bff
+if (enableColorTheme)
+    bullishColor := ColorThemes.getThemeColor(selectedColorTheme, 'Bullish')
+    bearishColor := ColorThemes.getThemeColor(selectedColorTheme, 'Bearish')
+
+mid = (open + close) / 2
+bodyMiddle = plot(mid, display=display.none, editable=false)
+
+
+SuperTrend1_Enabled = input.bool(true, "✅ Enable", group="🌊 TimeFrame #1 🌊")
+SuperTrend1_Timeframe = input.timeframe("240", "  🥽 Timeframe", group="🌊 TimeFrame #1 🌊")
+SuperTrend1_Period = input.int(50, "  🔎 Period", group="🌊 TimeFrame #1 🌊")
+SuperTrend1_Factor = input.float(3.0, "  ⚙️ Factor", group="🌊 TimeFrame #1 🌊")
+SuperTrend1_BullishColor = input.color(color.rgb(54, 255, 58), "    🖌️ Bullish Color", group="🌊 TimeFrame #1 🌊", inline="Colors")
+SuperTrend1_BearishColor = input.color(color.rgb(255, 61, 61), "    🖌️ Bearish Color", group="🌊 TimeFrame #1 🌊", inline="Colors")
+SuperTrend1_LabelEnabled = input.bool(true, "✅ Enable Label", group="🌊 TimeFrame #1 🌊")
+SuperTrend1_LabelSize = input.string("Normal", "  📐 Size", options=["Auto", "Tiny", "Small", "Normal", "Large", "Huge"], group="🌊 TimeFrame #1 🌊")
+SuperTrend1_LabelOffsetInBars = input.int(35, "  📏 Label Offset (in Bars)", group="🌊 TimeFrame #1 🌊")
+SuperTrend1_ShowLabelLine = input.bool(true, "✅ Show Label Line", group="🌊 TimeFrame #1 🌊")
+
+SuperTrend1_Hidden = hideLowerTimeframes and (timeframe.in_seconds() > timeframe.in_seconds(SuperTrend1_Timeframe))
+_SuperTrend1_BearishColor = enableColorTheme ? bearishColor : SuperTrend1_BearishColor
+_SuperTrend1_BullishColor = enableColorTheme ? bullishColor : SuperTrend1_BullishColor
+[_SuperTrend1_Value, _SuperTrend1_Direction] =  request.security(syminfo.ticker, SuperTrend1_Timeframe, ta.supertrend(SuperTrend1_Factor, SuperTrend1_Period), barmerge.gaps_off, barmerge.lookahead_off)
+SuperTrend1_Value = SuperTrend1_Enabled and not SuperTrend1_Hidden ? _SuperTrend1_Value : na
+SuperTrend1_Direction = SuperTrend1_Enabled and not SuperTrend1_Hidden ? _SuperTrend1_Direction : na
+SuperTrend1_Color = SuperTrend1_Direction > 0 ? _SuperTrend1_BullishColor : _SuperTrend1_BearishColor
+_SuperTrend1_Color = SuperTrend1_Color
+ST1_Long = plot(SuperTrend1_Enabled and SuperTrend1_Direction > 0 ? SuperTrend1_Value : na, color=_SuperTrend1_Color, linewidth=1, style = plot.style_linebr, title="🌊 TimeFrame #1 🌊 Long SuperTrend", join = true)
+ST1_Short = plot(SuperTrend1_Enabled and SuperTrend1_Direction < 0 ? SuperTrend1_Value : na, color=_SuperTrend1_Color, linewidth=1, style = plot.style_linebr, title="🌊 TimeFrame #1 🌊 Short SuperTrend", join = true)
+fill(ST1_Long, bodyMiddle, color = color.new(_SuperTrend1_Color, 90), fillgaps = false, display = fill_SuperTrends ? display.all : display.none)
+fill(ST1_Short, bodyMiddle, color = color.new(_SuperTrend1_Color, 90), fillgaps = false, display = fill_SuperTrends ? display.all : display.none)
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+SuperTrend2_Enabled = input.bool(true, "✅ Enable", group="🌊 TimeFrame #2 🌊")
+SuperTrend2_Timeframe = input.timeframe("1D", "  🥽 Timeframe", group="🌊 TimeFrame #2 🌊")
+SuperTrend2_Period = input.int(50, "  🔎 Period", group="🌊 TimeFrame #2 🌊")
+SuperTrend2_Factor = input.float(3.0, "  ⚙️ Factor", group="🌊 TimeFrame #2 🌊")
+SuperTrend2_BullishColor = input.color(color.rgb(54, 233, 58), "    🖌️ Bullish Color", group="🌊 TimeFrame #2 🌊", inline="Colors")
+SuperTrend2_BearishColor = input.color(color.rgb(233, 61, 61), "    🖌️ Bearish Color", group="🌊 TimeFrame #2 🌊", inline="Colors")
+SuperTrend2_LabelEnabled = input.bool(true, "✅ Enable Label", group="🌊 TimeFrame #2 🌊")
+SuperTrend2_LabelSize = input.string("Normal", "  📐 Size", options=["Auto", "Tiny", "Small", "Normal", "Large", "Huge"], group="🌊 TimeFrame #2 🌊")
+SuperTrend2_LabelOffsetInBars = input.int(35, "  📏 Label Offset (in Bars)", group="🌊 TimeFrame #2 🌊")
+SuperTrend2_ShowLabelLine = input.bool(true, "✅ Show Label Line", group="🌊 TimeFrame #2 🌊")
+
+SuperTrend2_Hidden = hideLowerTimeframes and (timeframe.in_seconds() > timeframe.in_seconds(SuperTrend2_Timeframe))
+_SuperTrend2_BearishColor = enableColorTheme ? bearishColor : SuperTrend2_BearishColor
+_SuperTrend2_BullishColor = enableColorTheme ? bullishColor : SuperTrend2_BullishColor
+[_SuperTrend2_Value, _SuperTrend2_Direction] =  request.security(syminfo.ticker, SuperTrend2_Timeframe, ta.supertrend(SuperTrend2_Factor, SuperTrend2_Period), barmerge.gaps_off, barmerge.lookahead_off)
+SuperTrend2_Value = SuperTrend2_Enabled and not SuperTrend2_Hidden ? _SuperTrend2_Value : na
+SuperTrend2_Direction = SuperTrend2_Enabled and not SuperTrend2_Hidden ? _SuperTrend2_Direction : na
+SuperTrend2_Color = SuperTrend2_Direction > 0 ? _SuperTrend2_BullishColor : _SuperTrend2_BearishColor
+_SuperTrend2_Color = SuperTrend2_Color
+ST2_Long = plot(SuperTrend2_Enabled and SuperTrend2_Direction > 0 ? SuperTrend2_Value : na, color=_SuperTrend2_Color, linewidth=1, style = plot.style_linebr, title="🌊 TimeFrame #2 🌊 Long SuperTrend", join = true)
+ST2_Short = plot(SuperTrend2_Enabled and SuperTrend2_Direction < 0 ? SuperTrend2_Value : na, color=_SuperTrend2_Color, linewidth=1, style = plot.style_linebr, title="🌊 TimeFrame #2 🌊 Short SuperTrend", join = true)
+fill(ST2_Long, bodyMiddle, color = color.new(_SuperTrend2_Color, 90),fillgaps = false, display = fill_SuperTrends ? display.all : display.none)
+fill(ST2_Short, bodyMiddle, color = color.new(_SuperTrend2_Color, 90),fillgaps = false, display = fill_SuperTrends ? display.all : display.none)
+
+// MTF Supertrend Labels
+var SuperTrend1_Label = label(na)
+var SuperTrend1_Label_Line = line(na)
+
+var SuperTrend2_Label = label(na)
+var SuperTrend2_Label_Line = line(na)
+
+var SuperTrend3_Label = label(na)
+var SuperTrend3_Label_Line = line(na)
+
+if (barstate.islast)
+    if (SuperTrend1_LabelEnabled and SuperTrend1_Enabled)
+        if (not na(SuperTrend1_Label))
+            label.delete(SuperTrend1_Label)
+            line.delete(SuperTrend1_Label_Line)
+        if (SuperTrend1_ShowLabelLine)
+            SuperTrend1_Label_Line := line.new(bar_index, SuperTrend1_Value, bar_index + SuperTrend1_LabelOffsetInBars, SuperTrend1_Value,
+              xloc=xloc.bar_index, extend=extend.none, color=_SuperTrend1_Color, width=1, style=line.style_dashed)
+        SuperTrend1_Label := label.new(bar_index + SuperTrend1_LabelOffsetInBars, SuperTrend1_Value, color=color.new(color.rgb(0,0,0),100), style=label.style_label_left, text="〽️ " + tfString(SuperTrend1_Timeframe) + " " + str.tostring(SuperTrend1_Period) + "/" + str.tostring(SuperTrend1_Factor) + " SuperTrend ➜ " + str.tostring(math.round_to_mintick(SuperTrend1_Value)), 
+          textcolor=_SuperTrend1_Color, size=getSize(SuperTrend1_LabelSize))
+
+    if (SuperTrend2_LabelEnabled and SuperTrend2_Enabled)
+        if (not na(SuperTrend2_Label))
+            label.delete(SuperTrend2_Label)
+            line.delete(SuperTrend2_Label_Line)
+        if (SuperTrend2_ShowLabelLine)
+            SuperTrend2_Label_Line := line.new(bar_index, SuperTrend2_Value, bar_index + SuperTrend2_LabelOffsetInBars, SuperTrend2_Value,
+              xloc=xloc.bar_index, extend=extend.none, color=_SuperTrend2_Color, width=1, style=line.style_dashed)
+        SuperTrend2_Label := label.new(bar_index + SuperTrend2_LabelOffsetInBars, SuperTrend2_Value, color=color.new(color.rgb(0,0,0),100), style=label.style_label_left, text="〽️ " + tfString(SuperTrend2_Timeframe) + " " + str.tostring(SuperTrend2_Period) + "/" + str.tostring(SuperTrend2_Factor) + " SuperTrend ➜ " + str.tostring(math.round_to_mintick(SuperTrend2_Value)), 
+          textcolor=_SuperTrend2_Color, size=getSize(SuperTrend2_LabelSize))
+
+// Plot SuperTrend values and directions
+plot(SuperTrend1_Value, color=color.blue, title="SuperTrend1 Value")
+plot(SuperTrend2_Value, color=color.red, title="SuperTrend2 Value")
+plotshape(series=SuperTrend1_Direction > 0, title="SuperTrend1 Direction", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.small)
+plotshape(series=SuperTrend2_Direction > 0, title="SuperTrend2 Direction", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.small)
+//  END  MTF SuperTrend
+
+
+
+//*****************************
+// User inputs for buy conditions
+group_buy_title = "Buy Conditions"
+buy_cond1 = input(true, title="trend above dead zone: trendUp > DEAD_ZONE", group=group_buy_title)
+buy_cond2 = input(true, title="explosion rising: e1 > e1[1] and e1[1] > e1[2]", group=group_buy_title)
+buy_cond3 = input(true, title="ADX in trend: ADX_sig > adx_threshold", group=group_buy_title)
+buy_cond4 = input(true, title="No squeeze or low squeeze: NoSqz or LowSqz", group=group_buy_title)
+buy_cond5 = input(true, title="Vix Fix Buy", group=group_buy_title)
+buy_cond6 = input(true, title="Trend Follower is positive: trendfollow > 0", group=group_buy_title)
+buy_cond7 = input(true, title="ST1 Long", group=group_buy_title)
+buy_cond8 = input(true, title="ST2 Long", group=group_buy_title)
+buy_cond9 = input(true, title="TD Buy Signals", group=group_buy_title)
+buy_cond10 = input(true, title="Ult RSI below threshold: ult_rsi < ult_rsi_os_thresh", group=group_buy_title)
+buy_cond11 = input(true, title="Ult RSI2 Entry: ult_rsi_arsi2 crosses up from below ult_rsi_signal2 AND below oversold level for ultrsi2", group=group_buy_title)
+buy_cond12 = input(true, title="HalfTrend Buy Signals", group=group_buy_title)
+buy_cond13 = input(true, title="VSLRT col11 condition", group=group_buy_title)
+buy_cond14 = input(true, title="VSLRT_LT VSLRT_LT_col11 condition", group=group_buy_title)
+
+
+// User inputs for sell conditions
+group_sell_title = "Sell Conditions"
+sell_cond1 = input(true, title="trend above dead zone: trendDown > DEAD_ZONE", group=group_sell_title)
+sell_cond2 = input(true, title="explosion rising: e1 > e1[1] and e1[1] > e1[2]", group=group_sell_title)
+sell_cond3 = input(true, title="ADX in trend: ADX_sig > adx_threshold", group=group_sell_title)
+sell_cond4 = input(true, title="No squeeze or low squeeze: NoSqz or LowSqz", group=group_sell_title)
+sell_cond5 = input(true, title="Vix Fix Sell", group=group_sell_title)
+sell_cond6 = input(true, title="Trend Follower is negative: trendfollow < 0", group=group_sell_title)
+sell_cond7 = input(true, title="ST1 Short", group=group_sell_title)
+sell_cond8 = input(true, title="ST2 Short", group=group_sell_title)
+sell_cond9 = input(true, title="TD Sell Signals", group=group_sell_title)
+sell_cond10 = input(true, title="Ult RSI above threshold: ult_rsi > ult_rsi_ob_thresh", group=group_sell_title)
+sell_cond11 = input(true, title="Ult RSI2 Entry: ult_rsi_arsi2 crosses down from above ult_rsi_signal2 AND above overbought level for ultrsi2", group=group_sell_title)
+sell_cond12 = input(true, title="HalfTrend Sell Signals", group=group_sell_title)
+sell_cond13 = input(true, title="VSLRT col23 condition", group=group_sell_title)
+sell_cond14 = input(true, title="VSLRT_LT VSLRT_LT_col23 condition", group=group_sell_title)
+
+
+
+// Define the time period during which trades are not allowed (in this case, from 9:55 PM to 11:00 PM UTC)
+startHour = 21
+startMinute = 55
+endHour = 23
+endMinute = 0
+
+// Get the current bar's time in UTC
+utcTime = timestamp(year, month, dayofmonth, hour, minute)
+currentHour = hour(utcTime)
+currentMinute = minute(utcTime)
+
+// Define the time filter
+timeFilter = not ((currentHour > startHour or (currentHour == startHour and currentMinute >= startMinute)) and (currentHour < endHour or (currentHour == endHour and currentMinute < endMinute)))
+
+// Buy / Sell conditions
+buyCondition = (buy_cond1 ? trendUp > DEAD_ZONE : true) and 
+               (buy_cond2 ? e1 > e1[1] and e1[1] > e1[2] : true) and 
+               (buy_cond3 ? ADX_sig > adx_threshold : true) and 
+               (buy_cond4 ? NoSqz or LowSqz : true) and 
+               (buy_cond5 ? Criteria_Filtered : true) and 
+               (buy_cond6 ? trendfollow > 0 : true) and 
+               (buy_cond7 ? close > SuperTrend1_Value : true) and 
+               (buy_cond8 ? close > SuperTrend2_Value : true) and 
+               (buy_cond9 ? TDbuycondition9 : true) and 
+               (buy_cond10 ? ult_rsi_arsi < ult_rsi_os_thresh : true) and 
+               (buy_cond11 ? ta.crossover(ult_rsi_arsi2, ult_rsi_signal2) and ult_rsi_arsi2 < ult_rsi_os2 : true) and 
+               (buy_cond12 ? HT_buySignal : true) and 
+               (buy_cond13 ? (slope_price_lt > 0 and slope_volume_up_lt > 0 and slope_volume_up_lt > slope_volume_down_lt) : true) and 
+               (buy_cond14 ? (VSLRT_LT_slope_price_lt > 0 and VSLRT_LT_slope_volume_up_lt > 0 and VSLRT_LT_slope_volume_up_lt > VSLRT_LT_slope_volume_down_lt) : true) and 
+               timeFilter
+
+sellCondition = (sell_cond1 ? trendDown > DEAD_ZONE : true) and (sell_cond2 ? e1 > e1[1] and e1[1] > e1[2] : true) and (sell_cond3 ? ADX_sig > adx_threshold : true) and (sell_cond4 ? NoSqz or LowSqz : true) and (sell_cond5 ? HIGHCriteria_Entry : true) and (sell_cond6 ? trendfollow < 0 : true) and (sell_cond7 ? close < SuperTrend1_Value : true) and (sell_cond8 ? close < SuperTrend2_Value : true) and (sell_cond9 ? TDsellcondition9 : true) and (sell_cond10 ? ult_rsi_arsi > ult_rsi_ob_thresh : true) and (sell_cond11 ? ta.crossunder(ult_rsi_arsi2, ult_rsi_signal2) and ult_rsi_arsi2 > ult_rsi_ob2 : true) and (sell_cond12 ? HT_sellSignal : true) and (sell_cond13 ? (slope_price_lt < 0 and slope_volume_down_lt > 0 and slope_volume_up_lt < slope_volume_down_lt) : true) and (sell_cond14 ? (VSLRT_LT_slope_price_lt < 0 and VSLRT_LT_slope_volume_down_lt > 0 and VSLRT_LT_slope_volume_up_lt < VSLRT_LT_slope_volume_down_lt) : true) and timeFilter
+
+
+
+
+
+// Define the exit condition
+float TF_SL = na
+if (trendfollow != 0 and trendfollow[1] == 0)
+    TF_SL := trendfollow > 0 ? -3 : 3
+
+
+// Define the values for the Data Window and the plot
+float DCAValue = na
+if (buyCondition)
+    DCAValue := 1
+else if (sellCondition)
+    DCAValue := -1
+
+
+// User inputs for SO Signal conditions
+SO_UltRSI = input(false, title="Ult RSI", group="SO Signal")
+SO_VixFix = input(true, title="Vix Fix", group="SO Signal")
+SO_BuyCond11 = input(true, title="AI MA Buy", group="SO Signal")
+SO_SellCond11 = input(true, title="AI MA Sell", group="SO Signal")
+
+// Define the Ult RSI buy/sell conditions
+buyConditionUltRSI = SO_UltRSI and ta.crossover(ult_rsi_arsi, ult_rsi_signal) and ult_rsi_arsi < ult_rsi_os
+sellConditionUltRSI = SO_UltRSI and ta.crossunder(ult_rsi_arsi, ult_rsi_signal) and ult_rsi_arsi > ult_rsi_ob
+
+// Define the Vix Fix buy/sell conditions
+buyConditionVixFix = SO_VixFix and Criteria_Filtered[1]
+sellConditionVixFix = SO_VixFix and HIGHCriteria_Entry[1]
+
+
+// Update the values for the Data Window and the plot
+if (buyConditionUltRSI or buyConditionVixFix)
+    DCAValue := 2
+else if (sellConditionUltRSI or sellConditionVixFix)
+    DCAValue := -2
+
+// Plot the values for the Data Window (with color set to na so they are not visible on the chart)
+plot(DCAValue, title="DCA Buy/Sell", color=na)
+
+plotshape(series=(DCAValue == 1), title="Buy Signal", location=location.belowbar, color=color.new(color.green, 0), style=shape.triangleup, size=size.tiny)
+plotshape(series=(DCAValue == -1), title="Sell Signal", location=location.abovebar, color=color.new(color.red, 0), style=shape.triangledown, size=size.tiny)
+plotshape(series=(DCAValue == 2), title="SO Signal Buy Signal", location=location.belowbar, color=color.new(color.yellow, 0), style=shape.triangleup, size=size.tiny)
+plotshape(series=(DCAValue == -2), title="SO Signal Sell Signal", location=location.abovebar, color=color.new(color.yellow, 0), style=shape.triangledown, size=size.tiny)
+
+
+

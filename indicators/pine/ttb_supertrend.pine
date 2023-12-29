@@ -1,0 +1,43 @@
+//@version=5
+indicator("TTB SupertrendX2", overlay=true, timeframe="", timeframe_gaps=true)
+
+// Settings for the first Supertrend
+atrPeriod1 = input(500, "ATR Length for Supertrend 1")
+factor1 = input.float(10.0, "Factor for Supertrend 1", step = 0.01)
+[supertrend1, direction1] = ta.supertrend(factor1, atrPeriod1)
+
+// Settings for the second Supertrend (TTB SuperTrend)
+atrPeriod2 = input(3000, "ATR Length for TTB SuperTrend")
+factor2 = input.float(30.0, "Factor for TTB SuperTrend", step = 0.01)
+[supertrend2, direction2] = ta.supertrend(factor2, atrPeriod2)
+
+// Plotting the first Supertrend
+upTrend1 = plot(direction1 < 0 ? supertrend1 : na, "Up Trend 1", color = color.green, style=plot.style_linebr)
+downTrend1 = plot(direction1 < 0? na : supertrend1, "Down Trend 1", color = color.red, style=plot.style_linebr)
+
+// Plotting the second Supertrend (TTB SuperTrend)
+upTrend2 = plot(direction2 < 0 ? supertrend2 : na, "Up Trend 2", color = color.green, style=plot.style_linebr)
+downTrend2 = plot(direction2 < 0? na : supertrend2, "Down Trend 2", color = color.red, style=plot.style_linebr)
+
+// Filling for the first Supertrend
+fill(upTrend1, downTrend1, color.new(color.green, 90), fillgaps=false)
+
+// Filling for the second Supertrend (TTB SuperTrend)
+fill(upTrend2, downTrend2, color.new(color.green, 90), fillgaps=false)
+
+// Background shading
+bgcolor((close > supertrend1 and close > supertrend2) ? color.green : na, transp=70)
+bgcolor((close < supertrend1 and close < supertrend2) ? color.red : na, transp=70)
+bgcolor((close > supertrend1 and close < supertrend2) or (close < supertrend1 and close > supertrend2) ? color.purple : na, transp=70)
+
+// Buy and Sell signals
+buySignal = ta.crossunder(direction1, 0) and direction1[1] > 0 and direction1 < 0 and direction2 < 0
+sellSignal = ta.crossover(direction1, 0) and direction1[1] < 0 and direction1 > 0 and direction2 > 0
+
+// Convert boolean values to numerical values
+buySignalNum = buySignal ? 1 : 0
+sellSignalNum = sellSignal ? 1 : 0
+
+// Plotting the buy and sell signals
+plot(buySignalNum == 1 ? buySignalNum : na, "Buy Signal", color=color.green)
+plot(sellSignalNum == -1 ? sellSignalNum : na, "Sell Signal", color=color.red)

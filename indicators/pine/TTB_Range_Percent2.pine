@@ -1,0 +1,53 @@
+//@version=5
+indicator("TTB Price Range %", overlay = true, max_labels_count = 500)
+
+// Define the lookback period and higher timeframe as user inputs
+lookbackPeriod = input(720, title="Lookback Period")
+higherTimeframe = input("D", title="Higher Timeframe")
+
+// Get the highest high and lowest low from the higher timeframe
+highFromHigherTimeframe = ta.highest(request.security(syminfo.tickerid, higherTimeframe, high, lookahead = barmerge.lookahead_off), lookbackPeriod)
+lowFromHigherTimeframe = ta.lowest(request.security(syminfo.tickerid, higherTimeframe, low, lookahead = barmerge.lookahead_off), lookbackPeriod)
+
+// Update the values only on the bar close of the higher timeframe
+resistance2 = ta.change(time(higherTimeframe)) ? highFromHigherTimeframe : na
+support2 = ta.change(time(higherTimeframe)) ? lowFromHigherTimeframe : na
+
+// Draw horizontal lines at the levels of resistance2 and support2
+if (not na(resistance2))
+    line.new(x1=bar_index[1], y1=resistance2, x2=bar_index, y2=resistance2, color=color.gray, width = 1)
+
+if (not na(support2))
+    line.new(x1=bar_index[1], y1=support2, x2=bar_index, y2=support2, color=color.gray, width = 1)
+
+
+//resistance2    = input.int(1800, "Resistance Zone2")
+//resistance1    = input.int(1800, "Resistance Zone1")
+//n_upper = input.int(500, "Neutral Zone upper")
+//n_lower = input.int(-500, "Neutral Zone lower")
+//support1    = input.int(-1800, "Support Zone")
+//support2    = input.int(-1800, "Support Zone")
+
+top             = hline(9999, "Ceiling")
+//resistance_line2       = hline(resistance2, "Resistance line", color=color.gray, linestyle=hline.style_dashed)
+//resistance_line1       = hline(resistance1, "Resistance line", color=color.gray, linestyle=hline.style_dashed)
+//n_upper_line    = hline(n_upper, "Neutral Upper line", color=color.gray, linestyle=hline.style_dashed)
+//zero            = hline(0, "Zero line", color=color.gray, linestyle=hline.style_dashed, linewidth=2)
+//n_lower_line    = hline(n_lower, "Neutral Lower line", color=color.gray, linestyle=hline.style_dashed)
+//support_line1      = hline(support1, "Support line", color=color.gray, linestyle=hline.style_dashed)
+//support_line2      = hline(support2, "Support line", color=color.gray, linestyle=hline.style_dashed)
+bottom          = hline(-9999, "Floor")
+
+
+//fill(top, resistance_line2,title="Zone 1", color=color.new(color.red,80))
+//fill(top, resistance_line1,title="Zone 2", color=color.new(color.green,80))
+//fill(resistance_line, n_upper_line,title="Zone 3", color=color.new(color.green,95))
+//fill(n_upper_line, n_lower_line,title="Zone 4", color=color.new(color.gray,90))
+//fill(n_lower_line, n_lower_line,title="Zone 5", color=color.new(color.gray,90))
+//fill(support_line1, bottom,title="Zone 6", color=color.new(color.red,80))
+//fill(support_line2, n_lower_line,title="Zone 7", color=color.new(color.green,95))
+
+
+
+
+

@@ -1,0 +1,98 @@
+//Copyright @SpiritualHealer117
+//@version=5
+indicator("TTB SnR Lines", shorttitle = "TTB SnR Lines", overlay=true)
+
+// Inputs {
+// INPUTS-1.0 - Define lookback periods
+lookback1 = input.int(title="Length 1", defval=20, group="Lookback Periods")
+lookback2 = input.int(title="Length 2", defval=50, group="Lookback Periods")
+lookback3 = input.int(title="Length 3", defval=300, group="Lookback Periods")
+
+// INPUTS-2.0 - Define Style Features
+sc = input.color(color.green,title="Support Color", group = "Style")
+rc = input.color(color.red,title="Resistance Color", group = "Style")
+lw = input.int(4, "Line Width", group = "Style")
+
+// }
+
+// Calculations {
+calc_levels(len) => 
+// CALC-1.0 - Calculate recent highs and lows 
+    recentHigh = ta.highest(high, len)
+    recentLow = ta.lowest(low, len)
+
+// CALC-2.0 - Finding Highest Support and Resistance Level for timeframe
+    supportLine = line.new(bar_index - len, recentLow, bar_index, recentLow, color=color.rgb(120, 123, 134, 100), extend=extend.right)
+    resistanceLine = line.new(bar_index - len, recentHigh, bar_index, recentHigh, color=color.rgb(120, 123, 134, 100), extend=extend.right)
+
+// CALC-3.0 - Update the Support / Resistance lines on new bars
+    if barstate.islast
+        line.set_xy1(supportLine, bar_index - len, recentLow)
+        line.set_xy2(supportLine, bar_index, recentLow)
+        line.set_xy1(resistanceLine, bar_index - len, recentHigh)
+        line.set_xy2(resistanceLine, bar_index, recentHigh)
+
+// CALC-4.0 - Determine which line is oldest and has the highest value
+        lines = line.all
+        res = lines.get(0)
+        sup = lines.get(0)
+
+        for i = 0 to lines.size() -  1
+            i_line = lines.get(i)
+            if i_line.get_y1() > res.get_y1()
+                res := i_line
+
+            else if i_line.get_y1() < sup.get_y1()
+                sup := i_line
+        
+        res_l = res.get_y1()
+        sup_l = sup.get_y1()
+
+        arr = line.all
+        for j = 0 to array.size(arr) - 1
+            line.delete(arr.get(j))
+
+        
+        temp = array.new_float(2,0.0)
+        temp.set(0,sup_l)
+        temp.set(1,res_l)
+        temp
+    //}
+
+//OUTPUT {
+
+t1 = calc_levels(lookback1)
+t2 = calc_levels(lookback2)
+t3 = calc_levels(lookback3)
+if barstate.islast
+    line.new(bar_index-lookback1,t1.get(0),bar_index,t1.get(0), xloc.bar_index,extend.both,color=sc,width=lw)
+    line.new(bar_index-lookback1,t1.get(1),bar_index,t1.get(1), xloc.bar_index,extend.both,color=rc,width=lw)
+    line.new(bar_index-lookback2,t2.get(0),bar_index,t2.get(0), xloc.bar_index,extend.both,color=sc,width=lw)
+    line.new(bar_index-lookback2,t2.get(1),bar_index,t2.get(1), xloc.bar_index,extend.both,color=rc,width=lw)
+    line.new(bar_index-lookback3,t3.get(0),bar_index,t3.get(0), xloc.bar_index,extend.both,color=sc,width=lw)
+    line.new(bar_index-lookback3,t3.get(1),bar_index,t3.get(1), xloc.bar_index,extend.both,color=rc,width=lw)
+
+
+// Extract values from arrays
+var float t1_0 = na
+var float t1_1 = na
+var float t2_0 = na
+var float t2_1 = na
+var float t3_0 = na
+var float t3_1 = na
+
+if barstate.islast
+    t1_0 := t1.get(0)
+    t1_1 := t1.get(1)
+    t2_0 := t2.get(0)
+    t2_1 := t2.get(1)
+    t3_0 := t3.get(0)
+    t3_1 := t3.get(1)
+
+// Plot lines
+plot(t1_0, color=sc, linewidth=lw)
+plot(t1_1, color=rc, linewidth=lw)
+plot(t2_0, color=sc, linewidth=lw)
+plot(t2_1, color=rc, linewidth=lw)
+plot(t3_0, color=sc, linewidth=lw)
+plot(t3_1, color=rc, linewidth=lw)
