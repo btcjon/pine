@@ -1,0 +1,151 @@
+//@version=5
+indicator("Market Structure Trailing Stop [LuxAlgo]", overlay = true, max_lines_count = 500)
+
+
+//-----------------------------------------------------------------------------}
+// Structure
+groupTitleStructureSettings = "Structure Settings"
+MSlength  = input(14, 'Pivot Lookback', group = groupTitleStructureSettings)
+incr    = input.float(80, 'Increment Factor %', minval = 0, group = groupTitleStructureSettings)
+StrucTF1 = input(title="StrucTF1", defval="60", group = groupTitleStructureSettings)
+showMS  = input(false, "Show Structures", group = groupTitleStructureSettings)
+showStrucPlots  = input(false, "Show Struc Plots", group = groupTitleStructureSettings)
+
+resetOn = 'CHoCH'
+
+//Style 
+bullCss    = color.rgb(7, 232, 187, 34)
+bearCss    = color.rgb(250, 36, 214, 37)
+retCss     = #ffbb00
+areaTransp = 90
+
+//------------------------------------------------------------------------------
+//Global variables
+//-----------------------------------------------------------------------------{
+var float ph_y = na , var int ph_x = na
+var float pl_y = na , var int pl_x = na
+var float top = na  , var float btm = na
+var ph_cross = false, var pl_cross = false
+
+var float max = na
+var float min = na
+var float ts = na
+
+var os = 0
+ms = 0
+
+//------------------------------------------------------------------------------
+//Detect pivots and get coordinates
+//-----------------------------------------------------------------------------{
+n = bar_index
+ph = ta.pivothigh(MSlength, MSlength)
+pl = ta.pivotlow(MSlength, MSlength)
+
+if ph > 0
+    ph_y := ph
+    ph_x := n - MSlength
+    ph_cross := false
+
+if pl > 0
+    pl_y := pl
+    pl_x := n - MSlength
+    pl_cross := false
+
+
+//-----------------------------------------------------------------------------}
+//Bullish structures
+//-----------------------------------------------------------------------------{
+if close > ph_y and not ph_cross
+    if resetOn == 'CHoCH'
+        ms := os == -1 ? 1 : 0
+    else
+        ms := 1
+
+    ph_cross := true
+
+    //Highilight bullish MS
+    if showMS
+        line.new(ph_x, ph_y, n, ph_y
+          , color = bullCss
+          , style = os == -1 ? line.style_dashed : line.style_dotted)
+
+    os := 1
+
+    //Search for local minima
+    btm := low
+    for i = 0 to (n - ph_x)-1
+        btm := math.min(low[i], btm)
+
+    osChange = os != os[1]
+
+//-----------------------------------------------------------------------------}
+//Bearish structures
+//-----------------------------------------------------------------------------{
+if close < pl_y and not pl_cross
+    if resetOn == 'CHoCH'
+        ms := os == 1 ? -1 : 0
+    else
+        ms := -1
+
+    pl_cross := true
+
+    //Highilight bearish MS
+    if showMS
+        line.new(pl_x, pl_y, n, pl_y
+          , color = bearCss
+          , style = os == 1 ? line.style_dashed : line.style_dotted)
+
+    os := -1
+
+    //Search for local maxima
+    top := high
+    for i = 0 to (n - pl_x)-1
+        top := math.max(high[i], top)
+
+    osChange = os != os[1]
+
+//-----------------------------------------------------------------------------}
+//Trailing stop
+//-----------------------------------------------------------------------------{
+//Trailing max/min
+if ms == 1
+    max := close
+else if ms == -1
+    min := close
+else
+    max := math.max(close, max)
+    min := math.min(close, min)
+
+//Trailing stop
+ts := ms == 1 ? btm
+  : ms == -1 ? top
+  : os == 1 ? ts + (max - max[1]) * incr / 100
+  : ts + (min - min[1]) * incr / 100
+
+//-----------------------------------------------------------------------------}
+//Plots
+//-----------------------------------------------------------------------------{
+css = (ms > 0) ? na 
+  : os == 1 ? bullCss
+  : bearCss
+
+// plot_price = plot(close, editable = false, display = display.none)
+// plot_ts    = plot(ts, 'Trailing Stop', color = css)
+
+plot_price = plot(showStrucPlots ? close : na, editable = false, display = display.none)
+plot_ts    = plot(showStrucPlots ? ts : na, 'Trailing Stop', color = css)
+
+css_area = (close - ts) * os < 0 ? retCss
+  : css
+
+//fill(plot_price, plot_ts, color.new(css_area, areaTransp))
+fill(plot_price, plot_ts, color.new(showStrucPlots ? css_area : na, areaTransp))
+
+// trend change plots
+osChange = os != os[1]
+
+trendUp = os == 1 and osChange
+trendDown = os == -1 and osChange
+
+trendingUp = os == 1
+trendingDown = os == -1
