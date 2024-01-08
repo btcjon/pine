@@ -39,7 +39,7 @@ else if LineStyleCloseInput == 'Dashed'
 
 // Time Frame 1 = TF1
 TF1_Menu = input.string(title='Display Lines Only, With Zones, or Disable     ', defval='S/R Zones', options=['S/R', 'S/R Zones', 'Disable'], group='*** Time Frame 1 ***')
-TF1_input = input.string(title='Time Frame 1', defval='2h', options=['Chart', '1m', '3m', '5m', '15m', '30m', '45m', '1h', '2h', '3h', '4h', '6h', '8h', '12h', 'D', '3D', 'W', '2W', '1M', '12M'], group='*** Time Frame 1 ***')
+TF1_input = input.string(title='Time Frame 1', defval='3h', options=['Chart', '1m', '3m', '5m', '15m', '30m', '45m', '1h', '2h', '3h', '4h', '6h', '8h', '12h', 'D', '3D', 'W', '2W', '1M', '12M'], group='*** Time Frame 1 ***')
 TF1_VolMA1Input = input.int(title='Volume MA - Threshold', defval=6, group='*** Time Frame 1 ***')
 TF1_NumZones = input.int(title='Number of Zones Back', defval=3, minval=1, maxval=100, group='*** Time Frame 1 ***',
  tooltip='Change how many zones back you would like on the chart for time frame 1 (this number applies to both # of support zones and # of resistance zones back). Be mindful of setting too high with other zones, as the maximum total lines allowed on the chart is 500.')
@@ -1136,10 +1136,16 @@ osChange = os != os[1]
 trendUp = os == 1 and osChange
 trendDown = os == -1 and osChange
 
-plotshape(series=trendUp, title="Up Trend", location=location.belowbar, color=color.new(#0bf3f7, 53), style=shape.triangleup, size=size.tiny)
-plotshape(series=trendDown, title="Down Trend", location=location.abovebar, color=color.new(#a50c91, 51), style=shape.triangledown, size=size.tiny)
-alertcondition(trendUp, title="Up Trend Alert", message="The trend is up!")
-alertcondition(trendDown, title="Down Trend Alert", message="The trend is down!")
+above_ts = ta.crossover (close, ts)
+below_ts = ta.crossunder(close, ts)
+
+plotshape(series=above_ts, title="Up Trend", location=location.belowbar, color=color.new(#0bf3f7, 53), style=shape.triangleup, size=size.tiny)
+plotshape(series=below_ts, title="Down Trend", location=location.abovebar, color=color.new(#a50c91, 51), style=shape.triangledown, size=size.tiny)
+
+//plotshape(series=trendUp, title="Up Trend", location=location.belowbar, color=color.new(#0bf3f7, 53), style=shape.triangleup, size=size.tiny)
+//plotshape(series=trendDown, title="Down Trend", location=location.abovebar, color=color.new(#a50c91, 51), style=shape.triangledown, size=size.tiny)
+alertcondition(above_ts, title="Up Trend Alert", message="The trend is up!")
+alertcondition(below_ts, title="Down Trend Alert", message="The trend is down!")
 
 //plotshape(series=ms == 1, title="ms == 1", location=location.belowbar, color=color.green, style=shape.triangleup, size=size.tiny)
 //plotshape(series=ms == -1, title="ms == -1", location=location.abovebar, color=color.red, style=shape.triangledown, size=size.tiny)
@@ -1149,10 +1155,10 @@ alertcondition(trendDown, title="Down Trend Alert", message="The trend is down!"
 
 
 // alerts
-if trendUp
+if above_ts
     alert('type=update,symbol=' + syminfo.ticker + ',keyword=up', alert.freq_once_per_bar_close)
 
-if trendDown
+if below_ts
     alert('type=update,symbol=' + syminfo.ticker + ',keyword=down', alert.freq_once_per_bar_close)
 
 //if trendFlat
@@ -1168,9 +1174,9 @@ if trendDown
 
 // Inputs
 showTD8buy = input(false, title="Show TD8 Buy", group='TD 8s and 9s')
-showTD9buy = input(false, title="Show TD9 Buy", group='TD 8s and 9s')
+showTD9buy = input(true, title="Show TD9 Buy", group='TD 8s and 9s')
 showTD8sell = input(false, title="Show TD8 Sell", group='TD 8s and 9s')
-showTD9sell = input(false, title="Show TD9 Sell", group='TD 8s and 9s')
+showTD9sell = input(true, title="Show TD9 Sell", group='TD 8s and 9s')
 showTD9sellOff = input(false, title="Show TD9 Sell Off", group='TD 8s and 9s')
 showTD9buyOff = input(false, title="Show TD9 Buy Off", group='TD 8s and 9s')
 TD9Offset = input(4, title="Offset for TD9 Buy/Sell Off", group='TD 8s and 9s')
@@ -1193,10 +1199,10 @@ TD9sell = sellSignals and BuyOrSell == 9
 
 // TD LABELS
 
-plotshape(TD8buy and showTD8buy, style=shape.labelup,text="8",color=color.new(#0bf3f7, 85), textcolor=color.rgb(255, 255, 255, 62), size=size.tiny, location=location.belowbar)
-plotshape(TD9buy and showTD9buy, style=shape.labelup,text="9",color=color.new(#0bf3f7, 74), textcolor=color.rgb(255, 255, 255, 57), size=size.tiny, location=location.belowbar)
-plotshape(TD8sell and showTD8sell, style=shape.labeldown,text="8",color=color.new(#a50c91, 51), textcolor=color.rgb(255, 255, 255, 54), size=size.tiny, location=location.abovebar)
-plotshape(TD9sell and showTD9sell, style=shape.labeldown,text="9",color=color.new(#a50c91, 51), textcolor=color.rgb(255, 255, 255, 57), size=size.tiny, location=location.abovebar)
+plotshape(TD8buy and showTD8buy, style=shape.labelup,text="8",color=color.new(#0bf3f7, 90), textcolor=color.rgb(255, 255, 255, 62), size=size.tiny, location=location.belowbar)
+plotshape(TD9buy and showTD9buy, style=shape.labelup,text="9",color=color.new(#0bf3f7, 90), textcolor=color.rgb(255, 255, 255, 57), size=size.tiny, location=location.belowbar)
+plotshape(TD8sell and showTD8sell, style=shape.labeldown,text="8",color=color.new(#f913db, 90), textcolor=color.rgb(255, 255, 255, 54), size=size.tiny, location=location.abovebar)
+plotshape(TD9sell and showTD9sell, style=shape.labeldown,text="9",color=color.new(#f913db, 90), textcolor=color.rgb(200, 198, 198, 58), size=size.tiny, location=location.abovebar)
 
 //DCA Plots
 TDbuycondition = (close < close[4]) ? buySignals[1] == 9 ? 1 : buySignals[1] + 1 : 0

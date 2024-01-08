@@ -1,5 +1,5 @@
 //@version=5
-strategy('TTB Phase 2L', overlay=true, initial_capital=1000000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false, max_bars_back=4900)
+strategy('TTB Phase 2', overlay=true, initial_capital=1000000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false, max_bars_back=4900)
 
 import thetradingbot/ttbcolors/1 as TTBColors
 
@@ -344,7 +344,7 @@ for j = 0 to max_S_safe_order - 1 by 1
     maxSDev
 
 // Entry
-if long and strategy.position_size == 0 and source_function(source_type) > 0 and (avg_price_entry_either_Input ? AvgPrice_Entry : true)
+if long and window and not(hour(time) == 0 and minute(time) < 59) and strategy.position_size == 0 and source_function(source_type) > 0 and (avg_price_entry_either_Input ? AvgPrice_Entry : true)
     _string_long = 'type=order,order-type=long,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + '",entry=true'
     strategy.entry('Long @' + str.tostring(source_function(source_type)), strategy.long, qty=base_order_lots * 100000, alert_message=_string_long)
     initial_order := source_function(source_type)
@@ -360,7 +360,7 @@ if long and strategy.position_size == 0 and source_function(source_type) > 0 and
     entrySignal := true
     barCountSinceEntry := 0  // Reset the counter at entry
 
-else if short and strategy.position_size == 0 and source_function(source_type) > 0 and (avg_price_entry_either_Input ? AvgPrice_Entry : true)
+else if short and window and not(hour(time) == 0 and minute(time) < 59) and strategy.position_size == 0 and source_function(source_type) > 0 and (avg_price_entry_either_Input ? AvgPrice_Entry : true)
     _string_short = 'type=order,order-type=short,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_S_order_lots) + ',comment="' + version + '-' + test + '",entry=true'
     strategy.entry('Short @' + str.tostring(source_function(source_type)), strategy.short, qty=base_S_order, alert_message=_string_short)
     initial_S_order := source_function(source_type)
@@ -408,10 +408,8 @@ else if strategy.position_size < 0 and i == 0
 
 
 // Long SO (Average Down)
-if (barCountSinceEntry > waitBars) and current_so > 0 and i == 0 and strategy.position_size > 0 and (Struc_trigger_SO ? trendUp : true)
-    order_size = safe_order * math.pow(safe_order_volume_scale, current_so - 1) // Calculate the size of the new SO
-    execution_price = close // Or use the actual execution price of the SO
-    _string_long_so = 'type=order,order-type=long,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(order_size) + ',comment="' + version + '-' + test + '",entry=false'
+if window and not(hour(time) == 0 and minute(time) < 59) and (barCountSinceEntry > waitBars) and current_so > 0 and i == 0 and strategy.position_size > 0 and (Struc_trigger_SO ? trendUp : true)
+    _string_long_so = 'type=order,order-type=long,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + '",entry=false'
     strategy.entry('SO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)), strategy.long, qty=order_size, alert_message=_string_long_so)
     total_funds_in_trade += execution_price * order_size // Update total funds based on the execution price of the new SO
     total_qty_in_trade += order_size // Update total quantity by adding the quantity of the new SO
@@ -421,7 +419,7 @@ if (barCountSinceEntry > waitBars) and current_so > 0 and i == 0 and strategy.po
 
 
 // Short SO (Average Up)
-if (barCountSinceEntry > waitBars) and current_so > 0 and i == 0 and strategy.position_size < 0 and (Struc_trigger_SO ? trendDown : true)
+if window and not(hour(time) == 0 and minute(time) < 59) and (barCountSinceEntry > waitBars) and current_so > 0 and i == 0 and strategy.position_size < 0 and (Struc_trigger_SO ? trendDown : true)
     _string_short_so = 'type=order,order-type=short,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + '",entry=false'
     strategy.entry('SSO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)), strategy.short, qty=safe_S_order * math.pow(safe_S_order_volume_scale, current_so - 1), alert_message=_string_short_so)
     total_funds_in_trade += avg_price * base_S_order * math.pow(safe_S_order_volume_scale, current_so - 1)
@@ -438,7 +436,7 @@ if i == 1
     i
 
 // If the take profit level is reached and the position is long, close the trade
-if take_profit_level <= high and strategy.position_size > 0 and not(hour(time) == 0 and minute(time) < 59)
+if not(hour(time) == 0 and minute(time) < 59) and (barCountSinceEntry > waitBars)and take_profit_level <= high and strategy.position_size > 0 and not(hour(time) == 0 and minute(time) < 59)
     _string_close_long = 'type=order,order-type=closelong,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + '"' // Prepare the close long order string
     strategy.close_all(comment='Close @' + str.tostring(source_function(source_type)), alert_message=_string_close_long) // Close the long position
     soCount := current_so // Save the current scale-out count
@@ -460,7 +458,7 @@ if take_profit_level <= high and strategy.position_size > 0 and not(hour(time) =
 
 // Take Short Profit! 
 // If the take short profit level is reached and the position is short, close the trade
-if take_S_profit_level >= low and strategy.position_size < 0 and not(hour(time) == 0 and minute(time) < 59)
+if not(hour(time) == 0 and minute(time) < 59) and (barCountSinceEntry > waitBars) and take_S_profit_level >= low and strategy.position_size < 0 and not(hour(time) == 0 and minute(time) < 59)
     _string_close_short = 'type=order,order-type=closeshort,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + '"' // Prepare the close short order string
     strategy.close_all(comment='Close Short @' + str.tostring(source_function(source_type)), alert_message=_string_close_short) // Close the short position
     soCount := current_so // Save the current scale-out count
