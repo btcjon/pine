@@ -354,7 +354,7 @@ if current_so > 0 and
     avg_price := total_funds_in_trade / total_qty_in_trade
     current_so += 1
     tradeCount += 1
-    log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
+    log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, str.tostring(strategy.position_size), (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
 
 order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
 
@@ -384,7 +384,7 @@ if current_so > 0 and
     avg_price := total_funds_in_trade / total_qty_in_trade
     current_so += 1
     tradeCount += 1
-    log.info("#{0} - S SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_S_order_lots * 100000), safe_S_order_volume_scale, safe_S_order_step_scale, take_profit_level)
+    log.info("#{0} - S SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, str.tostring(strategy.position_size), (safe_S_order_lots * 100000), safe_S_order_volume_scale, safe_S_order_step_scale, take_profit_level)
 
 
 // Take Profit! 
@@ -476,7 +476,6 @@ if strategy.position_size == 0
 closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
 
 
-
 if low < price_drop and window and strategy.position_size > 0
     price_drop := low
     if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
@@ -486,10 +485,10 @@ if low < price_drop and window and strategy.position_size > 0
     price_change_percentage = ((initial_price - price_drop) / initial_price) * 100
     max_drop_atrp_temp = price_change_percentage / atrp_daily
     max_drop_atrp := round_to(math.max(max_drop_atrp, max_drop_atrp_temp), 4)
-    log.info("Max Drop ATRP: {0}, Max Drop: {1}, Price Drop: {2}, Date: {3}/{4}", max_drop_atrp, max_drop, price_drop, drop_month, drop_date)
+//    log.info("Max Drop ATRP: {0}, Max Drop: {1}, Price Drop: {2}, Date: {3}/{4}", max_drop_atrp, max_drop, price_drop, drop_month, drop_date)
 bgcolor(max_drop_atrp[1] < max_drop_atrp ? color.new(#00bbd4, 24) : na)
-plot(max_drop_atrp[1] < max_drop_atrp ? max_drop_atrp : na, title="Max Drop ATRP", color=color.new(color.red, 100))
-plot(max_drop[1] < max_drop ? max_drop : na, title="Max Drop", color=color.new(color.red, 100))
+plot(max_drop_atrp[1] < max_drop_atrp ? max_drop_atrp : na, title="Max Drop ATRP", color=color.new(color.red, 30))
+plot(max_drop[1] < max_drop ? max_drop : na, title="Max Drop", color=color.new(color.red, 30))
 
 
 if high > price_pump and window and strategy.position_size < 0
@@ -501,10 +500,10 @@ if high > price_pump and window and strategy.position_size < 0
         max_pump := price_change_percentage
         pump_date := dayofmonth(time)
         pump_month := month(time)
-    log.info("Max Pump ATRP: {0}, Max Pump: {1}, Price Pump: {2}, Date: {3}/{4}", max_pump_atrp, max_pump, price_pump, pump_month, pump_date)
+//    log.info("Max Pump ATRP: {0}, Max Pump: {1}, Price Pump: {2}, Date: {3}/{4}", max_pump_atrp, max_pump, price_pump, pump_month, pump_date)
 bgcolor(max_pump_atrp[1] < max_pump_atrp ? color.new(#9b27b0, 22) : na)
-plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=color.new(color.green, 100))
-plot(max_pump[1] < max_pump ? max_pump : na, title="Max Pump", color=color.new(color.green, 100))
+plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=color.new(color.green, 30))
+plot(max_pump[1] < max_pump ? max_pump : na, title="Max Pump", color=color.new(color.green, 30))
 
 
 if take_profit_level > 0 and strategy.position_size > 0
