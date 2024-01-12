@@ -276,7 +276,6 @@ if strategy.position_size > 0 and i == 0
         else
             array.set(SO_distance, j - 1, initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2))))
     threshold := array.get(SO_distance, current_so - 1)
-    threshold := SO_distance[current_so]
 else if strategy.position_size < 0 and i == 0
     atrp_distance = atrp_daily * max_atrp_SO_distance
     var float[] S_SO_distance = array.new_float(max_S_safe_order)
@@ -286,7 +285,6 @@ else if strategy.position_size < 0 and i == 0
         else
             array.set(S_SO_distance, j - 1, initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2))))
     S_threshold := array.get(S_SO_distance, current_so - 1)
-    S_threshold := S_SO_distance[current_so]
 
 
 groupTitleSOsLongConditions = "Long SO Conditions"
