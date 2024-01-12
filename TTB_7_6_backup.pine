@@ -108,6 +108,8 @@ safe_order_volume_scale = input.float(1.0, step=0.1, title='Safety order volume 
 safe_order_step_scale = input.float(1.5, step=0.1, title='Safety order step scale')
 max_safe_order = input(6, title='max no. of safe orders')
 price_S_deviation = input.float(0.06, title='Price deviation to open short safety orders (%)', step=0.1, minval=0.0) / 100
+// Input for maximum ATRP distance for the last SO
+max_atrp_SO_distance = input.float(1.0, title='Max ATRP distance for last SO', step=0.1)
 //take_S_profit = input.float(0.09, title='Short Target Take Profit (%)', step=0.1, minval=0.0) / 100
 take_S_profit = atrp_target / 100
 base_S_order_lots = input.float(0.4, title='Base Sell Order Size (Lots)', step=0.01)
@@ -263,10 +265,6 @@ if strategy.position_size == 0
     threshold := low[1]
     S_threshold := high[1]
     S_threshold
-
-
-// Input for maximum ATRP distance for the last SO
-max_atrp_SO_distance = input.float(1.0, title='Max ATRP distance for last SO', step=0.1)
 
 //Safety order (SO) levels
 if strategy.position_size > 0 and i == 0
