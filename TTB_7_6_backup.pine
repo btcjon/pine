@@ -333,8 +333,9 @@ if current_so > 0 and
    (use_SO_filters_long ? SO_filter_input_long == SO_filter_value_long and current_so > min_SO_for_filter_long : true) and
    (use_SO_trigger_long ? SO_trigger_input_long == SO_triggervalue_long and current_so > min_SO_for_trigger_long : true) and
    current_so <= max_safe_order
-    // Calculate the order size in units, considering the number of lots and the scaling factor
-    order_size_units = safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1) * 100000
+    // Calculate the order size in units, considering the number of lots and the scaling factor, and update the threshold for the next SO
+    order_size_units = safe_order_lots * math.pow(safe_order_volume_scale, current_so) * 100000
+    threshold := array.get(SO_distance, current_so)
     _string_long_so = ""
     if webhookMessage == "fdas"
         _string_long_so := 'type=order,order-type=long,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '",entry=false'
@@ -359,8 +360,9 @@ if current_so > 0 and
    (use_SO_filters_short ? SO_filter_input_short == SO_filter_value_short and current_so > min_SO_for_filter_short : true) and
    (use_SO_trigger_short ? SO_trigger_input_short == SO_triggervalue_short and current_so > min_SO_for_trigger_short : true) and
    current_so <= max_S_safe_order
-    // Calculate the order size in units, considering the number of lots and the scaling factor
-    order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
+    // Calculate the order size in units, considering the number of lots and the scaling factor, and update the S_threshold for the next SO
+    order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so) * 100000
+    S_threshold := array.get(S_SO_distance, current_so)
     
     // Place the safety order
     _string_short_so = ""
