@@ -1,0 +1,57 @@
+//@version=5
+indicator(title='TTB ADXVMAx3', shorttitle='TTB ADXVMAx3', overlay=true)
+
+// Inputs for the three ADXVMA plots
+adxvma_period1 = input.int(5, title="Period 1", minval=1)
+threshold1 = input.float(0.00001, title="Trend Change Threshold 1") 
+
+adxvma_period2 = input.int(30, title="Period 2", minval=1)
+threshold2 = input.float(0.000005, title="Trend Change Threshold 2")
+
+adxvma_period3 = input.int(80, title="Period 3", minval=1)
+threshold3 = input.float(0.000007, title="Trend Change Threshold 3")
+
+// Function to compute ADXVMA
+adxvma_function(period, threshold) =>
+    var float up = na
+    var float down = na
+    var float ups = na
+    var float downs = na
+    var float index = na
+    var float adxvma = na
+    var int trend = na
+    k = 1.0 / period
+    volatility = ta.atr(200)
+    currentUp = math.max(close - close[1], 0)
+    currentDown = math.max(close[1] - close, 0)
+    up := (1 - k) * nz(up[1]) + k * currentUp
+    down := (1 - k) * nz(down[1]) + k * currentDown
+    sum = up + down
+    fractionUp = sum > 0 ? up / sum : 0
+    fractionDown = sum > 0 ? down / sum : 0
+    ups := (1 - k) * nz(ups[1]) + k * fractionUp
+    downs := (1 - k) * nz(downs[1]) + k * fractionDown
+    normDiff = math.abs(ups - downs)
+    normSum = ups + downs
+    normFraction = normSum > 0.0 ? normDiff / normSum : 0
+    index := (1 - k) * nz(index[1]) + k * normFraction
+    epsilon = 0.1 * nz(volatility[1])
+    hhp = ta.highest(index, period)[1]
+    llp = ta.lowest(index, period)[1]
+    hhv = math.max(index, hhp)
+    llv = math.min(index, llp)
+    vIndex = hhv - llv > 0.0 ? (index - llv) / (hhv - llv) : 0
+    adxvma := (1 - k * vIndex) * nz(adxvma[1]) + k * vIndex * close
+    trend := math.abs(adxvma - nz(adxvma[1])) < threshold * nz(adxvma[1]) ? 0 : (nz(trend[1]) > -1 and adxvma > nz(adxvma[1])) ? 1 : (nz(trend[1]) < 1 and adxvma < nz(adxvma[1])) ? -1 : trend[1]
+    lcolor = trend == 0 ? color.yellow : trend == 1 ? color.green : color.red
+    [adxvma, lcolor]
+
+// Calculate ADXVMA for three plots
+[adxvma1, lcolor1] = adxvma_function(adxvma_period1, threshold1)
+[adxvma2, lcolor2] = adxvma_function(adxvma_period2, threshold2)
+[adxvma3, lcolor3] = adxvma_function(adxvma_period3, threshold3)
+
+// Plot the three ADXVMA lines
+plot(adxvma1, color=color.new(lcolor1, 0), linewidth=1, title="ADXVMA 1")
+plot(adxvma2, color=color.new(lcolor2, 0), linewidth=1, title="ADXVMA 2")
+plot(adxvma3, color=color.new(lcolor3, 0), linewidth=1, title="ADXVMA 3")

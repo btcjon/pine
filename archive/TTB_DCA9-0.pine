@@ -1,0 +1,135 @@
+//@version=5
+strategy(title="TTB DCA 9-0", shorttitle="TTB DCA 9-0", overlay=true, 
+     initial_capital=1000000, calc_on_order_fills=true, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD,
+     pyramiding=5, use_bar_magnifier=true, calc_on_every_tick=false, process_orders_on_close=true, close_entries_rule='ANY')
+
+start_after_X_bars = 500
+//entry inputs
+trigger = input(defval=close, title="Enter trigger")
+long_trigger = input(title='Long trigger value', defval=1)
+short_trigger = input(title='Short trigger value', defval=-1)
+default_condition = close > open and close > math.max(close[2], open[2]) and low[1] < low[2] and high[1] < high[2]
+
+// Date Ranges
+startDateTime = input.time(timestamp("1 Feb 2021 12:00"), title="Start", group="Strategy Date Range")
+endDateTime = input.time(timestamp("1 Feb 2024 12:00"), title="End", group="Strategy Date Range")
+window = time >= startDateTime and time <= endDateTime ? true : false  // create function "within window of time"
+
+//exit inputs
+atrPeriod_TP      = 10
+atrMultiplier_TP  = input.float( 2.0 , title='TP ATR Multiplier')
+ATR_TP = ta.atr(atrPeriod_TP)[1] * atrMultiplier_TP
+atrPeriod_SL      = 10
+atrMultiplier_SL  = input.float( 20.0 , title='SL ATR Multiplier')
+ATR_SL = ta.atr(atrPeriod_SL)[1] * atrMultiplier_SL
+
+//size inputs
+L1_lots = input.float( 0.4 , title='L1 size')
+Size_Factor = input.float( 1 , title='Size Factor')
+L2_lots = L1_lots * Size_Factor
+L3_lots = L2_lots * Size_Factor
+L4_lots = L3_lots * Size_Factor
+L5_lots = L4_lots * Size_Factor
+
+//SO inputs (entry levels for L2-L5)
+atrPeriod_SOs       = 10
+atrMultiplier_SO    = input.float( 1.5 , title='SO ATR Multiplier')
+SO_factor           = input.float( 1.5 , title='SO factor') 
+
+// Calculate ATR for SO
+ATR_SO = ta.atr(atrPeriod_SOs)[1] * atrMultiplier_SO
+
+L1_order = L1_lots * 100000
+L2_order = L2_lots * 100000
+L3_order = L3_lots * 100000
+L4_order = L4_lots * 100000
+L5_order = L5_lots * 100000
+
+// Initialize existing arrays
+var entryFlags = array.new_int(5, 0)
+var SLlines = array.new_float(5, na)
+var TPlines = array.new_float(5, na)
+var orderSizes = array.new_float(5, na)
+
+// Initialize new arrays for calculating the weighted average entry price
+var entryPrices = array.new_float(0)
+var tradeSizes = array.new_float(0)
+var AVGLine = array.new_float(5, na)
+var entry_levels = array.new_float(5, na)
+
+// Set order sizes
+array.set(orderSizes, 0, L1_order)
+array.set(orderSizes, 1, L2_order)
+array.set(orderSizes, 2, L3_order)
+array.set(orderSizes, 3, L4_order)
+array.set(orderSizes, 4, L5_order)
+
+// Define entry levels for L2-L5
+array.set(entry_levels, 0, array.get(AVGLine, 0) - ATR_SO)
+array.set(entry_levels, 1, array.get(AVGLine, 0) - ATR_SO * SO_factor * 1)
+array.set(entry_levels, 2, array.get(AVGLine, 0) - ATR_SO * SO_factor * 2)
+array.set(entry_levels, 3, array.get(AVGLine, 0) - ATR_SO * SO_factor * 3)
+array.set(entry_levels, 4, array.get(AVGLine, 0) - ATR_SO * SO_factor * 4)
+
+// entry conditions
+cond = array.new_bool(5, false)
+array.set(cond, 0, window and barstate.isconfirmed and (bar_index > start_after_X_bars) and (trigger == long_trigger))
+array.set(cond, 1, close <= array.get(entry_levels, 1))
+array.set(cond, 2, close <= array.get(entry_levels, 2))
+array.set(cond, 3, close <= array.get(entry_levels, 3))
+array.set(cond, 4, close <= array.get(entry_levels, 4))
+
+// Entry and exit conditions
+for i = 0 to 4
+    if barstate.isconfirmed and array.get(cond, i) and array.get(entryFlags, i) == 0
+        SL = close[0] - ATR_SL
+        TP = close[0] + ATR_TP
+        strategy.entry('L' + str.tostring(i + 1), strategy.long, qty=array.get(orderSizes, i))
+        array.set(SLlines, i, SL)
+        array.set(TPlines, i, TP)
+        array.set(entryFlags, i, 1)
+        array.push(entryPrices, close[0] * array.get(orderSizes, i)) // Multiply the entry price by the size of the trade
+        array.push(tradeSizes, array.get(orderSizes, i)) // Add the size of the trade
+    if array.get(entryFlags, i) == 1
+        var totalSize = array.sum(tradeSizes)
+        var weightedSum = array.sum(entryPrices)
+        var avgLine = weightedSum / totalSize
+        array.set(AVGLine, i, avgLine) // Set the weighted average entry price
+        log.info("AVGLine after L{0} entry: {1}", i + 1, avgLine)
+        // Define entry levels for L2-L5 inside the loop
+        if i < 4 // No need to calculate for L5 since there's no L6
+            array.set(entry_levels, i + 1, avgLine - ATR_SO * SO_factor)
+//exits
+for i = 0 to 4
+    if array.get(entryFlags, i) == 1
+        strategy.exit('xL' + str.tostring(i + 1), from_entry = 'L' + str.tostring(i + 1), limit = array.get(TPlines, i), stop = array.get(SLlines, i))
+        if high > array.get(TPlines, i) or low < array.get(SLlines, i)
+            array.set(entryFlags, i, 0)
+            array.set(AVGLine, i, na) // Reset AVGLine
+            array.set(entry_levels, i, na) // Reset entry_levels
+// plots
+plot(array.get(entryFlags, 0) == 1 ? array.get(TPlines, 0) : na, color=color.new(color.blue  , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 0) == 1 ? array.get(SLlines, 0) : na, color=color.new(color.blue  , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 1) == 1 ? array.get(TPlines, 1) : na, color=color.new(color.yellow, 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 1) == 1 ? array.get(SLlines, 1) : na, color=color.new(color.yellow, 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 2) == 1 ? array.get(TPlines, 2) : na, color=color.new(color.white , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 2) == 1 ? array.get(SLlines, 2) : na, color=color.new(color.white , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 3) == 1 ? array.get(TPlines, 3) : na, color=color.new(color.lime  , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 3) == 1 ? array.get(SLlines, 3) : na, color=color.new(color.lime  , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 4) == 1 ? array.get(TPlines, 4) : na, color=color.new(color.red   , 50), style=plot.style_linebr)
+plot(array.get(entryFlags, 4) == 1 ? array.get(SLlines, 4) : na, color=color.new(color.red   , 50), style=plot.style_linebr)
+
+// Plotting AVGLine
+plot(array.get(AVGLine, 0), color=color.new(#ffffff, 54), style=plot.style_linebr, title="Average Entry Line 1")
+plot(array.get(AVGLine, 1), color=color.new(#ffffff, 54), style=plot.style_linebr, title="Average Entry Line 2")
+plot(array.get(AVGLine, 2), color=color.new(#ffffff, 54), style=plot.style_linebr, title="Average Entry Line 3")
+plot(array.get(AVGLine, 3), color=color.new(#ffffff, 54), style=plot.style_linebr, title="Average Entry Line 4")
+plot(array.get(AVGLine, 4), color=color.new(#ffffff, 54), style=plot.style_linebr, title="Average Entry Line 5")
+// Plotting Entry Levels
+plot(array.get(entryFlags, 0) == 1 and array.get(entryFlags, 1) == 0 ? array.get(entry_levels, 1) : na, color=color.new(#800080, 54), style=plot.style_linebr, title="Potential Entry Level 2")
+plot(array.get(entryFlags, 1) == 1 and array.get(entryFlags, 2) == 0 ? array.get(entry_levels, 2) : na, color=color.new(#800080, 54), style=plot.style_linebr, title="Potential Entry Level 3")
+plot(array.get(entryFlags, 2) == 1 and array.get(entryFlags, 3) == 0 ? array.get(entry_levels, 3) : na, color=color.new(#800080, 54), style=plot.style_linebr, title="Potential Entry Level 4")
+plot(array.get(entryFlags, 3) == 1 and array.get(entryFlags, 4) == 0 ? array.get(entry_levels, 4) : na, color=color.new(#800080, 54), style=plot.style_linebr, title="Potential Entry Level 5")
+
+
+// We are running into come issues.  we want L2-5 to be entered based on average entry - ATR_SO * SO_factor.  The idea is that we are averaging into our orders and each time we average in (SO) the average entry lowers as well as the TP level, making it easier to exit the trade

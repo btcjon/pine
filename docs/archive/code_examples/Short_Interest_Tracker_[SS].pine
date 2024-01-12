@@ -1,0 +1,48 @@
+
+// © Steversteves
+//@version=5
+indicator("Short Interest Tracker [SS]", overlay=true)
+sma_len =   input.int(14, "SMA Length") 
+as_len =    input.int(4, "Assessment Length for Short Interest Rise/Fall", tooltip = "This will set the assessment length to determine whether short selling is increasing or decreasing. Reccomend 3 to 4.")
+daily =     input(true, "Display Daily Data") 
+weekly =    input(true, "Display Weekly Data") 
+monthly =   input(true, "Display Monthly Data") 
+
+ct = syminfo.ticker 
+
+string contraption = "FINRA:"+ str.tostring(ct) + "_SHORT_VOLUME" 
+curt = contraption 
+
+[vol, change_1_day, sma, rise, fall] = request.security(curt, "D", [close, (close - close[1]) / close[1] * 100, ta.sma(close, sma_len), ta.rising(ta.sma(close, sma_len), as_len), ta.falling(ta.sma(close, sma_len), as_len)], lookahead = barmerge.lookahead_on)
+[change_1_week, last_week_vol, week_sma, week_rise, week_fall] = request.security(curt, "W", [(close[1] - close[2]) / close[2] * 100, close[1], ta.sma(close, sma_len), ta.rising(ta.sma(close, sma_len), as_len), ta.falling(ta.sma(close, sma_len), as_len)], lookahead = barmerge.lookahead_on)
+[change_1_month, last_month_vol, month_sma, month_rise, month_fall] = request.security(curt, "M", [(close[1] - close[2]) / close[2] * 100, close[1], ta.sma(close, sma_len), ta.rising(ta.sma(close, sma_len), as_len), ta.falling(ta.sma(close, sma_len), as_len)], lookahead = barmerge.lookahead_on)
+
+color background = color.rgb(0,0,0)
+color white = color.white 
+
+daily_sma_ratio = vol / sma 
+weekly_sma_ratio = last_week_vol / week_sma
+monthly_sma_ratio = last_month_vol / month_sma 
+var table shortvol = table.new(position.middle_right, 5, 20, bgcolor = background, frame_color = color.aqua, frame_width = 3) 
+table.cell(shortvol, 1, 1, text = "Short Analytics for " + str.tostring(ct), bgcolor = color.teal, text_color = white)
+if daily 
+    table.cell(shortvol, 1, 2, text = "1 Day Analytics", bgcolor = color.gray, text_color = white) 
+    table.cell(shortvol, 1, 3, text = "Current Short Volume: " + str.tostring(vol), text_color = white)
+    table.cell(shortvol, 1, 4, text = "Short Volume " + str.tostring(math.round(sma_len, 2)) + " Day SMA: " + str.tostring(math.round(sma,2)), text_color = white)
+    table.cell(shortvol, 1, 5, text = "Volume to SMA Ratio: " + str.tostring(math.round(daily_sma_ratio, 2)), text_color = daily_sma_ratio < 1 ? color.lime : color.red)
+    table.cell(shortvol, 1, 6, text = "1 Day Change: " + str.tostring(math.round(change_1_day,2)) + "%", text_color = change_1_day < 0 ? color.lime : color.red)
+    table.cell(shortvol, 1, 7, text = rise ? "Short Interest Rising" : fall ? "Short Interest Falling" : "Short Interest Steady", text_color = rise ? color.red : fall ? color.lime : white)
+if weekly 
+    table.cell(shortvol, 1, 8, text = "Week Analytics", bgcolor = color.gray, text_color = white)   
+    table.cell(shortvol, 1, 9, text = "Last Week Short Volume: " + str.tostring(math.round(last_week_vol,2)), text_color = white) 
+    table.cell(shortvol, 1, 10, text = "Short Volume " + str.tostring(math.round(sma_len, 2)) + " Week SMA: " + str.tostring(math.round(week_sma,2)), text_color = white)
+    table.cell(shortvol, 1, 11, text = "Volume to SMA Ratio: " + str.tostring(math.round(weekly_sma_ratio, 2)), text_color = weekly_sma_ratio < 1 ? color.lime : color.red)
+    table.cell(shortvol, 1, 12, text = "1 Week Change: " + str.tostring(math.round(change_1_week,2)) + "%", text_color = change_1_week < 0 ? color.lime : color.red)
+    table.cell(shortvol, 1, 13, text = week_rise ? "Short Interest Rising" : week_fall ? "Short Interest Falling" : "Short Interest Steady", text_color = week_rise ? color.red : week_fall ? color.lime : white)
+if monthly 
+    table.cell(shortvol, 1, 14, text = "Month Analytics", bgcolor = color.gray, text_color = white) 
+    table.cell(shortvol, 1, 15, text = "Last Month Short Volume: " + str.tostring(math.round(last_month_vol,2)), text_color = white) 
+    table.cell(shortvol, 1, 16, text = "Short Volume " + str.tostring(math.round(sma_len, 2)) + " Month SMA: " + str.tostring(math.round(month_sma,2)), text_color = white)
+    table.cell(shortvol, 1, 17, text = "Volume to SMA Ratio: " + str.tostring(math.round(monthly_sma_ratio, 2)), text_color = monthly_sma_ratio < 1 ? color.lime : color.red)
+    table.cell(shortvol, 1, 18, text = "1 Month Change: " + str.tostring(math.round(change_1_month,2)) + "%", text_color = change_1_month < 0 ? color.lime : color.red)
+    table.cell(shortvol, 1, 19, text = month_rise ? "Short Interest Rising" : month_fall ? "Short Interest Falling" : "Short Interest Steady", text_color = month_rise ? color.red : month_fall ? color.lime : white)

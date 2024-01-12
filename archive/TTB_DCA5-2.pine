@@ -1,0 +1,1059 @@
+//This is a TradingView "stategy" script that allows backtesting and automating trading alerts for running an automated trading system.
+
+// ## long_trigger and short_trigger are the (entry signal) generated from indicator logic indcluded
+
+// ## Safety Orders (SOs)
+// code for this in these commented sections "Average Down - SOs for Longs" and  "Short Average Up - SOs for Shorts"
+
+// Safe Orders (SOs): Activated when price goes against the initial entry to protect against adverse movements.
+
+// Where should the 1st SO happen if price goes against entry?  Based on either a set percentage against entry OR signals from another indicator.
+
+// Max no. of sate orders: This defines the max number of SOs allowed.
+
+// Where should 1st SO order happen? = "Price Deviation To Open Safety Trades (%)" (the percent deviation against original entry)
+
+// Price deviation to open safety orders (%): Open SO orders every N% of price movement. The price and size are calculated according to settings (step scale, volume scale)
+
+// Size of 1st SO? =  Safe order (lots)
+
+// Size of Subsequent SOs = What is the size/volume of the next SO? "Safety Order Volume Scale" * "Safety order volume scale"
+
+// Location of Additional SOs: What % from previous SO should the next SO be? "Safety order step scale" * "Price Deviation To Open Safety Trades (%)" 
+
+// ## Deal End
+// Take Profit: End deal when the "Target Take Profit (%)"
+
+// Main logic of strategy is from  section commented "// Strat logic" to "Take Short Profit!"
+
+
+
+// notes...
+//                                  Known issues:
+//
+// When deviation is small, and the same candle triggers safety AND the close order, the initial orders are closed, but a 
+// new one opens on the next candle. This is "resolved" by closing the unwanted trade forcefully on the next candle, affecting 
+// profit calculating minimally and guaranteeing that what should be closed has been closed.
+//
+// The code could be improved through use of arrays, making the table flexible so the number of rows should be dynamic depending
+// on the number of SOs.
+//
+//
+//                                  !!!!! IMPORTANT!!!!!
+//
+// This strategy script is made to receieve a signal from an exterior study script, which should plot +100 for long or -100 for short 
+// entry (that is by default - values can be changed in the strategy settings menu). That plot should be found in "Enter Trigger" input 
+// dropdown menu at the bottom of strategy settings menu. Removing the "and trigger == long/short_trigger" condition from strategy entry 
+// conditions makes the strategy open trades ASAP.
+
+// Cheers!
+
+//@version=5
+
+strategy('TTB DCA 5.2', overlay=true, pyramiding=999, calc_on_every_tick=false, default_qty_type=strategy.cash, default_qty_value=1, initial_capital=100000, commission_value=0.00, slippage=0)
+// Date Ranges
+show_table = input(true, title='Show table')
+text_size_switch = input(true, title='Small text in the table')
+ID = input(defval='6700960415957', title='ID')
+direction = input.string(defval='Long', title='Trading Direction', options=['All', 'Long', 'Short'])
+
+source_type = input.string('Close', 'Source', options=['Close', 'Open', 'High', 'Low', 'HL2', 'HLC3', 'OHLC4', 'Median Body', 'Weighted Close', 'Trend Biased', 'Trend Biased Extreme'])
+
+source_function(type) =>
+    if type == 'Close'
+        close
+    else if type == 'Open'
+        open
+    else if type == 'High'
+        high
+    else if type == 'Low'
+        low
+    else if type == 'HL2'
+        hl2
+    else if type == 'HL3'
+        hlc3
+    else if type == 'OHLC4'
+        ohlc4
+    else if type == 'Median Body'
+        (open + close) / 2
+    else if type == 'Weighted Close'
+        (high + low + 2 * close) / 4
+    else if type == 'Trend Biased'
+        close > open ? (high + close) / 2 : (low + close) / 2
+    else if type == 'Trend Biased Extreme'
+        close > open ? high : low
+
+truncate(number, decimals) =>
+    factor = math.pow(10, decimals)
+    int(number * factor) / factor
+
+var long = false
+var short = true
+
+if direction == 'All'
+    long := true
+    short := true
+    short
+else if direction == 'Long'
+    long := true
+    short := false
+    short
+else if direction == 'Short'
+    long := false
+    short := true
+    short
+
+// Strategy Inputs
+// Long Strategy Inputs
+group_long_inputs_inputs_title = "Long Inputs"
+price_deviation_input = input.float(0.06, title='Price deviation to open safety orders (%)', step=0.1, minval=0.0, group=group_long_inputs_inputs_title)
+price_deviation = price_deviation_input / 100
+take_profit_input = input.float(0.11, title='Target Take Profit (%)', step=0.1, minval=0.0, group=group_long_inputs_inputs_title)
+take_profit = take_profit_input / 100
+base_order_lots = input.float(0.1, title='base order (lots)', group=group_long_inputs_inputs_title)
+safe_order_lots = input.float(0.15, title='safe order (lots)', group=group_long_inputs_inputs_title)
+safe_order_volume_scale = input.float(1.4, step=0.1, title='Safety order volume scale', group=group_long_inputs_inputs_title)
+safe_order_volume_scale_factor = input.float(1.2, step=0.1, title='Safety order volume scale factor', group=group_long_inputs_inputs_title)
+safe_order_step_scale = input.float(1.2, step=0.1, title='Safety order step scale', group=group_long_inputs_inputs_title)
+safe_order_step_scale_factor = input.float(1.4, step=0.1, title='Safety order step scale factor',group=group_long_inputs_inputs_title)
+max_safe_order = input(6, title='max no. of safe orders', group=group_long_inputs_inputs_title)
+
+// Convert lots to units
+base_order_units = base_order_lots * 100000
+safe_order_units = safe_order_lots * 100000
+
+// Short Strategy Inputs
+group_short_inputs_inputs_title = "Short Inputs"
+price_S_deviation_input = input.float(0.06, title='Price deviation to open short safety orders (%)', step=0.1, minval=0.0, group=group_short_inputs_inputs_title)
+price_S_deviation = price_S_deviation_input / 100
+take_S_profit_input = input.float(0.11, title='Short Target Take Profit (%)', step=0.1, minval=0.0, group=group_short_inputs_inputs_title)
+take_S_profit = take_S_profit_input / 100
+base_S_order_lots = input.float(0.1, title='base sell order (lots)', group=group_short_inputs_inputs_title)
+safe_S_order_lots = input.float(0.15, title='safe sell order (lots)', group=group_short_inputs_inputs_title)
+safe_S_order_volume_scale = input.float(1.4, step=0.1, title='Safety sell order volume scale', group=group_short_inputs_inputs_title)
+safe_S_order_volume_scale_factor = input.float(1.2, step=0.1, title='Safety sell order volume scale factor', group=group_short_inputs_inputs_title)
+safe_S_order_step_scale = input.float(1.2, step=0.1, title='Safety sell order step scale', group=group_short_inputs_inputs_title)
+safe_S_order_step_scale_factor = input.float(1.4, step=0.1, title='Safety sell order step scale factor', group=group_short_inputs_inputs_title)
+max_S_safe_order = input(6, title='max no. of sell safe orders', group=group_short_inputs_inputs_title)
+
+// Convert lots to units
+base_S_order_units = base_S_order_lots * 100000
+safe_S_order_units = safe_S_order_lots * 100000
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// half trend
+//half trend inputs
+group_half_trend_inputs_title = "Half Trend Inputs"
+amplitude = input(title='Amplitude', defval=10, group=group_half_trend_inputs_title)
+channelDeviation = input(title='Channel Deviation', defval=10, group=group_half_trend_inputs_title)
+showArrows = input(title='Show Arrows', defval=false, group=group_half_trend_inputs_title)
+showChannels = input(title='Show Channels', defval=false, group=group_half_trend_inputs_title)
+
+var int trend = 0
+var int nextTrend = 0
+var float maxLowPrice = nz(low[1], low)
+var float minHighPrice = nz(high[1], high)
+
+var float up = 0.0
+var float down = 0.0
+float atrHigh = 0.0
+float atrLow = 0.0
+float arrowUp = na
+float arrowDown = na
+
+atr2 = ta.atr(100) / 2
+dev = channelDeviation * atr2
+
+highPrice = high[math.abs(ta.highestbars(amplitude))]
+lowPrice = low[math.abs(ta.lowestbars(amplitude))]
+highma = ta.sma(high, amplitude)
+lowma = ta.sma(low, amplitude)
+
+if nextTrend == 1
+    maxLowPrice := math.max(lowPrice, maxLowPrice)
+
+    if highma < maxLowPrice and close < nz(low[1], low)
+        trend := 1
+        nextTrend := 0
+        minHighPrice := highPrice
+        minHighPrice
+else
+    minHighPrice := math.min(highPrice, minHighPrice)
+
+    if lowma > minHighPrice and close > nz(high[1], high)
+        trend := 0
+        nextTrend := 1
+        maxLowPrice := lowPrice
+        maxLowPrice
+
+if trend == 0
+    if not na(trend[1]) and trend[1] != 0
+        up := na(down[1]) ? down : down[1]
+        arrowUp := up - atr2
+        arrowUp
+    else
+        up := na(up[1]) ? maxLowPrice : math.max(maxLowPrice, up[1])
+        up
+    atrHigh := up + dev
+    atrLow := up - dev
+    atrLow
+else
+    if not na(trend[1]) and trend[1] != 1
+        down := na(up[1]) ? up : up[1]
+        arrowDown := down + atr2
+        arrowDown
+    else
+        down := na(down[1]) ? minHighPrice : math.min(minHighPrice, down[1])
+        down
+    atrHigh := down + dev
+    atrLow := down - dev
+    atrLow
+
+ht = trend == 0 ? up : down
+
+var color buyColor = color.blue
+var color sellColor = color.red
+
+htColor = trend == 0 ? buyColor : sellColor
+//htPlot = plot(ht, title='HalfTrend', linewidth=2, color=htColor)
+
+// atrHighPlot = plot(showChannels ? atrHigh : na, title='ATR High', style=plot.style_circles, color=color.new(sellColor, 0))
+// atrLowPlot = plot(showChannels ? atrLow : na, title='ATR Low', style=plot.style_circles, color=color.new(buyColor, 0))
+
+// fill(htPlot, atrHighPlot, title='ATR High Ribbon', color=color.new(sellColor, 90))
+// fill(htPlot, atrLowPlot, title='ATR Low Ribbon', color=color.new(buyColor, 90))
+
+HTbuySignal = not na(arrowUp) and trend == 0 and trend[1] == 1
+HTsellSignal = not na(arrowDown) and trend == 1 and trend[1] == 0
+
+plotshape(showArrows and HTbuySignal, title='Arrow Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(buyColor, 0))
+plotshape(showArrows and HTsellSignal, title='Arrow Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(sellColor, 0))
+
+//End half trend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// VSLRT
+
+// group_vslrt_inputs_inputs_title = "VSLRT Inputs"
+// src = input(defval=close, title='Source', group=group_vslrt_inputs_inputs_title)
+// len1 = input.int(defval=150, title='Short Term Length', minval=5, group=group_vslrt_inputs_inputs_title)
+// len2 = input.int(defval=300, title='Long Term Length', minval=5, group=group_vslrt_inputs_inputs_title)
+
+// ccol11 = color.new(color.green, 100)
+// ccol12 = color.new(color.green, 80)
+// ccol13 = color.new(color.green, 50)
+// ccol21 = color.new(color.red, 100)
+// ccol22 = color.new(color.red, 80)
+// ccol23 = color.new(color.red, 50)
+// col11 = color.new(color.blue, 100)
+// col12 = color.new(color.blue, 80)
+// col13 = color.new(color.blue, 50)
+// col21 = color.new(color.orange, 100)
+// col22 = color.new(color.orange, 80)
+// col23 = color.new(color.orange, 50)
+
+// // get short/long-term regression slope
+// slope_price = ta.linreg(src, len1, 0) - ta.linreg(src, len1, 1)
+// slope_price_lt = ta.linreg(src, len2, 0) - ta.linreg(src, len2, 1)
+
+// // get the size of top/bottom/body of the candle
+// tw = high - math.max(open, close)
+// bw = math.min(open, close) - low
+// body = math.abs(close - open)
+
+// //Calculate Buy/Sell Volume
+// _rate(cond) =>
+//     ret = 0.5 * (tw + bw + (cond ? 2 * body : 0)) / (tw + bw + body)
+//     ret := na(ret) ? 0.5 : ret
+//     ret
+
+// // Calculate Regression Slope for Buy/Sell Volumes
+// _get_trend(len) =>
+//     deltaup = volume * _rate(open <= close)
+//     deltadown = volume * _rate(open > close)
+
+//     slope_volume_up = ta.linreg(deltaup, len, 0) - ta.linreg(deltaup, len, 1)
+//     slope_volume_down = ta.linreg(deltadown, len, 0) - ta.linreg(deltadown, len, 1)
+//     [slope_volume_up, slope_volume_down]
+
+// // get buy/sell volume regression slopes for short term period
+// [slope_volume_up, slope_volume_down] = _get_trend(len1)
+
+// // coloring columns
+// column_col = slope_price > 0 ? slope_volume_up > 0 ? slope_volume_up > slope_volume_down ? ccol11 : ccol12 : ccol13 : slope_price < 0 ? slope_volume_down > 0 ? slope_volume_up < slope_volume_down ? ccol21 : ccol22 : ccol23 : color.gray
+
+// // short term trend
+// plot(slope_price * len1, color=column_col, style=plot.style_columns)
+
+// // get buy/sell volume regression slopes for long term period
+// [slope_volume_up_lt, slope_volume_down_lt] = _get_trend(len2)
+
+// // coloring columns
+// column_col := slope_price_lt > 0 ? slope_volume_up_lt > 0 ? slope_volume_up_lt > slope_volume_down_lt ? col11 : col12 : col13 : slope_price_lt < 0 ? slope_volume_down_lt > 0 ? slope_volume_up_lt < slope_volume_down_lt ? col21 : col22 : col23 : color.gray
+
+// VSLRTbuy = slope_price_lt > 0 ? slope_volume_up_lt > 0 ? slope_volume_up_lt > slope_volume_down_lt ? true : false : false : slope_price_lt < 0 ? slope_volume_down_lt > 0 ? slope_volume_up_lt < slope_volume_down_lt ? false : false : false : false
+// VSLRTsell = slope_price_lt > 0 ? slope_volume_up_lt > 0 ? slope_volume_up_lt > slope_volume_down_lt ? false : false : false : slope_price_lt < 0 ? slope_volume_down_lt > 0 ? slope_volume_up_lt < slope_volume_down_lt ? true : false : false : false
+
+// // Long term trend
+// plot(slope_price_lt * len2, color=column_col, linewidth=3)
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// END VSLRT
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// ADXVMA
+group_ADXVMA_inputs_inputs_title = "ADXVMA Inputs"
+main_period = input.int(5, minval=1, title='Main ADXVMA Period', group=group_ADXVMA_inputs_inputs_title)
+second_tf = input.timeframe(defval='5', title='2nd Timeframe', group=group_ADXVMA_inputs_inputs_title)
+second_period = input.int(8, minval=1, title='2nd Period', group=group_ADXVMA_inputs_inputs_title)
+third_tf = input.timeframe(defval='10', title='3rd Timeframe', group=group_ADXVMA_inputs_inputs_title)
+third_period = input.int(8, minval=1, title='3rd Period', group=group_ADXVMA_inputs_inputs_title)
+show_plots = input(false, title='Show Plots?', group=group_ADXVMA_inputs_inputs_title)
+
+get_adxvma(src, period) =>
+    ups = 0.0
+    downs = 0.0
+    index = 0.0
+    adxvma = 0.0
+    up = 0.0
+    down = 0.0
+
+    k = 1.0 / period
+
+    volatility = ta.atr(200)
+
+    currentUp = math.max(src[0] - src[1], 0)
+    currentDown = math.max(src[1] - src[0], 0)
+
+    up := (1 - k) * nz(up[1]) + k * currentUp[0]
+    down := (1 - k) * nz(down[1]) + k * currentDown[0]
+
+    sum = up[0] + down[0]
+
+    fractionUp = 0.0
+    fractionDown = 0.0
+
+    if sum > 0.0
+        fractionUp := up[0] / sum
+        fractionDown := down[0] / sum
+        fractionDown
+
+    ups := (1 - k) * nz(ups[1]) + k * fractionUp
+    downs := (1 - k) * nz(downs[1]) + k * fractionDown
+
+    normDiff = math.abs(ups[0] - downs[0])
+    normSum = ups[0] + downs[0]
+
+    normFraction = normSum > 0.0 ? normDiff / normSum : na
+
+    index := (1 - k) * nz(index[1]) + k * normFraction
+    ups := (1 - k) * nz(ups[1]) + k * fractionUp
+    downs := (1 - k) * nz(downs[1]) + k * fractionDown
+
+    epsilon = 0.1 * nz(volatility[1])
+    hhp = ta.highest(index, period)[1]
+    llp = ta.lowest(index, period)[1]
+
+    hhv = math.max(index[0], hhp)
+    llv = math.min(index[0], llp)
+
+    vIndex = 0.0
+
+    if hhv - llv > 0.0
+        vIndex := (index[0] - llv) / (hhv - llv)
+        vIndex
+
+    adxvma := (1 - k * vIndex) * nz(adxvma[1]) + k * vIndex * src[0]
+
+    line_color = color.lime
+    var trend = 0
+    if nz(trend[1]) > -1 and adxvma > nz(adxvma[1])
+        trend := 1
+        line_color
+    else
+        if nz(trend[1]) < 1 and adxvma < nz(adxvma[1])
+            trend := -1
+            line_color := color.red
+            line_color
+        else
+            trend := 0
+            line_color := color.yellow
+            line_color
+    [adxvma, line_color]
+
+// inputs and plots
+
+[main_adxvma, main_adxvma_color] = get_adxvma(close, main_period)
+plot(show_plots ? main_adxvma : na, title='ADXVMA', color=main_adxvma_color, linewidth=1)
+
+// second MTF
+use_second_mtf = input(true, title='Use 2nd TF ADXVMA?')
+[second_adxvma, second_adxvma_color] = request.security(syminfo.tickerid, second_tf, get_adxvma(close, second_period))
+plot(show_plots and use_second_mtf ? second_adxvma : na, title='2nd Timeframe ADXVMA', style=plot.style_cross, color=second_adxvma_color, linewidth=1, join=true)
+
+// third MTF
+use_third_mtf = input(true, title='Use 3rd TF ADXVMA?')
+[third_adxvma, third_adxvma_color] = request.security(syminfo.tickerid, third_tf, get_adxvma(close, third_period))
+plot(show_plots and use_third_mtf ? third_adxvma : na, title='3rd Timeframe ADXVMA', color=third_adxvma_color, linewidth=1, join=true) //style=plot.style_cross
+
+ADXVMAbuy = main_adxvma > nz(main_adxvma[1]) and second_adxvma > nz(second_adxvma[1]) and third_adxvma > nz(third_adxvma[1])
+ADXVMAsell = main_adxvma < nz(main_adxvma[1]) and second_adxvma < nz(second_adxvma[1]) and third_adxvma < nz(third_adxvma[1])
+
+// END ADXVMA
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// dow theory
+// group_dow_inputs_inputs_title = "Dow Inputs"
+// show_dow_plots = input(false, title='Show Plots?', group=group_dow_inputs_inputs_title)
+// show_SL_plots = input(false, title='Show SL Plots?', group=group_dow_inputs_inputs_title)
+// tableposition=input.string("top_right",title="Table position", options=["top_left", "top_center", "top_right", "middle_left", "middle_center", "middle_right", "bottom_left", "bottom_center", "bottom_right"])
+// tabpos= tableposition== "top_left"? position.top_left:tableposition== "top_center"?position.top_center : tableposition== "top_right"? position.top_right : tableposition== "middle_left"? position.middle_left : tableposition== "middle_center"? position.middle_center : tableposition== "middle_right"? position.middle_right : tableposition== "bottom_left"? position.bottom_left : tableposition== "bottom_center"? position.bottom_center: tableposition== "bottom_right"? position.bottom_right: position.top_right
+// oneSet = input.timeframe(defval='3', title='First Timeframe', group=group_dow_inputs_inputs_title)
+// twoSet = input.timeframe(defval='5', title='Second Timeframe', group=group_dow_inputs_inputs_title)
+// threeSet = input.timeframe(defval='30', title='Third Timeframe', group=group_dow_inputs_inputs_title)
+// fourSet = input.timeframe(defval='240', title='Fourth Timeframe', group=group_dow_inputs_inputs_title)
+// fiveSet = input.timeframe(defval='D', title='Fifth Timeframe', group=group_dow_inputs_inputs_title)
+
+// f_Strat() =>
+//     U = (high >= high[1]) and (low >= low[1]) and close>high[1]
+//     D = (high <= high[1]) and (low <= low[1]) and close<low[1]
+//     UX = U[1] and not D 
+//     DX = D[1] and not U
+//     UVX = (U[1] or UX[1]) and not U and not D
+//     DVX = (D[1] or DX[1]) and not U and not D
+//     OC = (high>high[1]) and (low<low[1])
+//     UC= (U[1] or UX[1] or UVX[1] ) and close>low[1] and close>close[1] and not (D[1] or DX[1] or DVX[1] or OC[1])
+//     DC= (D[1] or DX[1] or DVX[1] ) and close<high[1] and close<close[1] and not (U[1] or UX[1] or UVX[1] or OC[1])
+//     UD = UC[1] and not D 
+//     DD = DC[1] and not U
+//     UE = close>low[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD) and ((U[1] or UX[1] or UVX[1] or UC[1] or UD[1]))
+//     DE = close<high[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD or UE) 
+//     [U, D, UX, DX, UVX, DVX, OC, UC, DC, UD, DD, UE, DE]
+
+
+// [U0, D0, UX0, DX0, UVX0, DVX0, OC0, UC0, DC0, UD0, DD0, UE0, DE0 ] = request.security(syminfo.tickerid, oneSet, f_Strat())
+// [U1, D1, UX1, DX1, UVX1, DVX1, OC1, UC1, DC1, UD1, DD1, UE1, DE1] = request.security(syminfo.tickerid, twoSet, f_Strat())
+// [U2, D2, UX2, DX2, UVX2, DVX2, OC2, UC2, DC2, UD2, DD2, UE2, DE2] = request.security(syminfo.tickerid, threeSet, f_Strat())
+// [U3, D3, UX3, DX3, UVX3, DVX3, OC3, UC3, DC3, UD3, DD3, UE3, DE3] = request.security(syminfo.tickerid, fourSet, f_Strat())
+// [U4, D4, UX4, DX4, UVX4, DVX4, OC4, UC4, DC4, UD4, DD4, UE4, DE4] = request.security(syminfo.tickerid, fiveSet, f_Strat())
+
+// // == TABLE PLOTTING ==
+// var table trendTable = table.new(tabpos, 5, 2, border_width=2)
+// upColor = color.rgb(38, 166, 154)
+// downColor = color.rgb(240, 83, 80)
+// tfColor = color.new(#999999, 0)
+// show_table4 = input(true,  "Show MTF Price Action Table?")
+
+// // Check to ensure boxes are all higher timeframe than the chart to remove glyph and gray out box if that's the case
+// tfInMinutes(simple string tf = "") =>
+//     float chartTf =
+//       timeframe.multiplier * (
+//       timeframe.isseconds ? 1. / 60             :
+//       timeframe.isminutes ? 1.                  :
+//       timeframe.isdaily   ? 60. * 24            :
+//       timeframe.isweekly  ? 60. * 24 * 7        :
+//       timeframe.ismonthly ? 60. * 24 * 30.4375  : na)
+//     float result = tf == "" ? chartTf : request.security(syminfo.tickerid, tf, chartTf)
+    
+// float chartTFInMinutes = tfInMinutes()
+// bool TF1Check = tfInMinutes(oneSet) < chartTFInMinutes
+// bool TF2Check = tfInMinutes(twoSet) < chartTFInMinutes
+// bool TF3Check = tfInMinutes(threeSet) < chartTFInMinutes
+// bool TF4Check = tfInMinutes(fourSet) < chartTFInMinutes
+// bool TF5Check = tfInMinutes(fiveSet) < chartTFInMinutes
+
+
+// // Define glyphs
+// glyph1 = TF1Check ? na : (U0 or UX0 or UVX0 or UC0 or UD0 or UE0 ) ? '▲ ': (D0 or DX0 or DVX0 or DC0 or DD0 or DE0) ? '▼ ' : na
+// glyph2 = TF2Check ? na : (U1 or UX1 or UVX1 or UC1 or UD1 or UE1) ? '▲ ': (D1 or DX1 or DVX1 or DC1 or DD1 or DE1) ? '▼ ' : na
+// glyph3 = TF3Check ? na : (U2 or UX2 or UVX2 or UC2 or UD2 or UE2) ? '▲ ': (D2 or DX2 or DVX2 or DC2 or DD2 or DE2) ? '▼ ' : na
+// glyph4 = TF4Check ? na : (U3 or UX3 or UVX3 or UC3 or UD3 or UE3) ? '▲ ': (D3 or DX3 or DVX3 or DC3 or DD3 or DE3) ? '▼ ' : na
+// glyph5 = TF5Check ? na : (U4 or UX4 or UVX4 or UC4 or UD4 or UE4 ) ? '▲ ': (D4 or DX4 or DVX4 or DC4 or DD4 or DE4) ? '▼ ' : na
+
+// f_fillCell(_column, _row, _cellText, _c_color) =>
+//     table.cell(trendTable, _column, _row, _cellText, bgcolor=color.new(_c_color, 70), text_color=_c_color, width=3)
+
+
+// if barstate.islast and show_table4
+//     f_fillCell(0, 0, glyph1 + oneSet, TF1Check ? tfColor : (U0 or UX0 or UVX0 or UC0 or UD0 or UE0 ) ? upColor : downColor)
+//     f_fillCell(1, 0, glyph2 + twoSet, TF2Check ? tfColor : (U1 or UX1 or UVX1 or UC1 or UD1 or UE1)  ? upColor : downColor)
+//     f_fillCell(2, 0, glyph3 + threeSet, TF3Check ? tfColor : (U2 or UX2 or UVX2 or UC2 or UD2 or UE2) ? upColor : downColor)
+//     f_fillCell(3, 0, glyph4 + fourSet, TF4Check ? tfColor : (U3 or UX3 or UVX3 or UC3 or UD3 or UE3) ? upColor : downColor)
+//     f_fillCell(4, 0, glyph5 + fiveSet, TF5Check ? tfColor : (U4 or UX4 or UVX4 or UC4 or UD4 or UE4 ) ? upColor : downColor)
+  
+ 
+
+
+// U = (high >= high[1]) and (low >= low[1]) and close>high[1]
+// D = (high <= high[1]) and (low <= low[1]) and close<low[1]
+// UX = U[1] and not D 
+// DX = D[1] and not U
+// UVX = (U[1] or UX[1]) and not U and not D
+// DVX = (D[1] or DX[1]) and not U and not D
+// OC = (high>high[1]) and (low<low[1])
+// UC= (U[1] or UX[1] or UVX[1] ) and close>low[1] and close>close[1] and not (D[1] or DX[1] or DVX[1] or OC[1])
+// DC= (D[1] or DX[1] or DVX[1] ) and close<high[1] and close<close[1] and not (U[1] or UX[1] or UVX[1] or OC[1])
+// UD = UC[1] and not D 
+// DD = DC[1] and not U
+
+// UE = close>low[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD) and ((U[1] or UX[1] or UVX[1] or UC[1] or UD[1]))
+// DE = close<high[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD or UE) 
+
+// uptrend = (U or UX or UVX or UC or UD or UE)
+// downtrend = (D or DX or DVX or DC or DD or DE)
+
+
+// plotshape(show_dow_plots ? UE : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+// plotshape(show_dow_plots ? DE : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+// plotshape(show_dow_plots ? UD : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+// plotshape(show_dow_plots ? DD : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+// plotshape(show_dow_plots ? U : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+// plotshape(show_dow_plots ? D : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+// plotshape(show_dow_plots ? UC : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+// plotshape(show_dow_plots ? DC : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+// plotshape(show_dow_plots ? UX : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+// plotshape(show_dow_plots ? DX : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+// plotshape(show_dow_plots ? UVX : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+// plotshape(show_dow_plots ? DVX : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+// plotshape(show_dow_plots ? OC : na, style=shape.diamond, location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny)
+
+// length = input.int(3, title="Trailing SL", minval=2)
+// lower = ta.lowest(length) -ta.atr(length)/5
+// upper = ta.highest(length) +ta.atr(length)/5
+
+// u = plot(show_SL_plots and downtrend ? upper : na, "Short SL", color=color.red, style = plot.style_linebr )
+// l = plot(show_SL_plots and uptrend ? lower : na, "Long SL", color=color.green, style = plot.style_linebr )
+
+// DowBuyFilter = U0 and U1 and U2
+// DowSellFilter = D0 and D1 and D2
+
+// End dow theory
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// TTB FDIAJFTMAPZ
+
+// Define your timeframes as user inputs
+group_fdi_inputs_inputs_title = "FDI Inputs"
+timeframe1 = input.timeframe("60", "Timeframe 1", group=group_fdi_inputs_inputs_title)
+timeframe2 = input.timeframe("60", "Timeframe 2", group=group_fdi_inputs_inputs_title)
+timeframe3 = input.timeframe("120", "Timeframe 3", group=group_fdi_inputs_inputs_title)
+timeframe4 = input.timeframe("120", "Timeframe 4", group=group_fdi_inputs_inputs_title)
+timeframe5 = input.timeframe("360", "Timeframe 5", group=group_fdi_inputs_inputs_title)
+showPlotsInput = input.bool(false, "Show Plots", group=group_fdi_inputs_inputs_title)
+     
+import loxx/loxxjuriktools/1
+import loxx/loxxexpandedsourcetypes/4
+
+greencolor = #2DD204  
+redcolor = #D2042D 
+
+fdip(float src, int per, int speedin)=>
+    float fmax = ta.highest(src, per)
+    float fmin = ta.lowest(src,  per)
+    float length = 0
+    float diff = 0
+    for i = 1 to per - 1
+        diff := (nz(src[i]) - fmin) / (fmax - fmin)
+        if i > 0
+            length += math.sqrt( math.pow(nz(diff[i]) - nz(diff[i + 1]), 2) + (1 / math.pow(per, 2)))
+    float fdi = 1 + (math.log(length) + math.log(2)) / math.log(2 * per)
+    float traildim = 1 / (2 - fdi)
+    float alpha = traildim / 2
+    int speed = math.round(speedin * alpha)
+    speed
+    
+calcrng(per)=>
+    float lsum = (per + 1) * low
+    float hsum = (per + 1) * high
+    float sumw = (per + 1)
+    int k = per
+    for j = 1 to per
+        lsum += k * nz(low[j])
+        hsum += k * nz(high[j])
+        sumw += k
+        k -= 1
+    float out = (hsum / sumw - lsum / sumw)
+    out
+
+fdi_src = input.source(hl2, "Source", group= "Source Settings")
+per = input.int(30, "Fractal Period Ingest", group = "Basic Settings")
+speed = input.int(20, "Speed", group = "Basic Settings")
+
+smthper = input.int(30, "Jurik Smoothing Period", group = "Jurik Settings")
+smthphs = input.float(0., "Jurik Smoothing Phase", group = "Jurik Settings")
+
+rngper = input.int(5, "Range Period", group = "Price Zone Settings")
+fdi_dev = input.float(1.8, "Deviation", group = "Price Zone Settings")
+colorbars = input.bool(true, "Color bars?", group = "UI Options")
+showsignals = input.bool(true, "Show signals?", group = "UI Options")
+
+fdiper = fdip(fdi_src, per, speed)
+
+sum = (fdiper + 1) * fdi_src
+sumw = (fdiper + 1)
+k = fdiper
+
+for j = 1 to fdiper 
+    sum += k * nz(fdi_src[j])
+    sumw += k
+    k -= 1
+
+tma = loxxjuriktools.jurik_filt(sum / sumw, smthper, smthphs)
+sig = tma[1]
+
+rng = calcrng(rngper)
+
+uplvl = tma + fdi_dev * rng
+dnlvl = tma - fdi_dev * rng
+
+colorout = tma > sig ? greencolor : redcolor
+
+
+
+barcolor(colorbars ? colorout : na)
+
+goLong = ta.crossover(tma, sig) 
+goShort = ta.crossunder(tma, sig)  
+
+plot(showPlotsInput ? tma : na, "TMA", color = colorout, linewidth = 3)
+plot(showPlotsInput ? uplvl : na, "Upper Channel", color = color.gray, linewidth = 1)
+plot(showPlotsInput ? dnlvl : na, "Lower Channel", color = color.gray, linewidth = 1)
+plotshape(showPlotsInput and goLong and showsignals, title = "Long", color = color.yellow, textcolor = color.yellow, text = "L", style = shape.triangleup, location = location.belowbar, size = size.tiny)
+plotshape(showPlotsInput and goShort and showsignals, title = "Short", color = color.fuchsia, textcolor = color.fuchsia, text = "S", style = shape.triangledown, location = location.abovebar, size = size.tiny)
+
+// Request tma and sig for each timeframe
+tma1 = request.security(syminfo.tickerid, timeframe1, tma)
+sig1 = request.security(syminfo.tickerid, timeframe1, sig)
+
+tma2 = request.security(syminfo.tickerid, timeframe2, tma)
+sig2 = request.security(syminfo.tickerid, timeframe2, sig)
+
+tma3 = request.security(syminfo.tickerid, timeframe3, tma)
+sig3 = request.security(syminfo.tickerid, timeframe3, sig)
+
+tma4 = request.security(syminfo.tickerid, timeframe4, tma)
+sig4 = request.security(syminfo.tickerid, timeframe4, sig)
+
+tma5 = request.security(syminfo.tickerid, timeframe5, tma)
+sig5 = request.security(syminfo.tickerid, timeframe5, sig)
+
+// Calculate colorout for each timeframe
+colorout1 = tma1 > sig1 ? greencolor : redcolor
+colorout2 = tma2 > sig2 ? greencolor : redcolor
+colorout3 = tma3 > sig3 ? greencolor : redcolor
+colorout4 = tma4 > sig4 ? greencolor : redcolor
+colorout5 = tma5 > sig5 ? greencolor : redcolor
+
+// Define your conditions
+fdi_buyConditionBackground = colorout1 == greencolor and colorout2 == greencolor and colorout3 == greencolor and colorout4 == greencolor and colorout5 == greencolor
+fdi_sellConditionBackground = colorout1 == redcolor and colorout2 == redcolor and colorout3 == redcolor and colorout4 == redcolor and colorout5 == redcolor
+
+// Shade the background when all conditions are true
+bgcolor(fdi_buyConditionBackground ? color.rgb(76, 175, 79, 93) : na, transp=90)
+bgcolor(fdi_sellConditionBackground ? color.rgb(255, 82, 82, 93) : na, transp=90)
+
+// Define your buy and sell conditions
+fdi_buyCondition = colorout1 == greencolor and colorout2 == greencolor and colorout3 == greencolor and colorout4 == greencolor and colorout5 == greencolor
+fdi_sellCondition = colorout1 == redcolor and colorout2 == redcolor and colorout3 == redcolor and colorout4 == redcolor and colorout5 == redcolor
+
+
+//alertcondition(goLong, title="Long", message="FDI-Adaptive, Jurik-Filtered, TMA w/ Price Zones [Loxx]: Long\nSymbol: {{ticker}}\nPrice: {{close}}")
+//alertcondition(goShort, title="Short", message="FDI-Adaptive, Jurik-Filtered, TMA w/ Price Zones [Loxx]]: Short\nSymbol: {{ticker}}\nPrice: {{close}}")
+
+
+//End TTB FDIAJFTMAPZ
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+//End fisher
+fish_len = input.int(9, minval=1, title="Fisher Length")
+high_ = ta.highest(hl2, fish_len)
+low_ = ta.lowest(hl2, fish_len)
+round_(val) => val > .99 ? .999 : val < -.99 ? -.999 : val
+value = 0.0
+value := round_(.66 * ((hl2 - low_) / (high_ - low_) - .5) + .67 * nz(value[1]))
+fish1 = 0.0
+fish1 := .5 * math.log((1 + value) / (1 - value)) + .5 * nz(fish1[1])
+fish2 = fish1[1]
+hline(2, "2", color=#E91E63)
+hline(0.75,"0.75", color=#787B86)
+hline(0, "0", color=#E91E63)
+hline(-0.75, "-0.75", color=#787B86)
+hline(-2, "-2", color=#E91E63)
+//plot(fish1, color=#2962FF, title="Fisher")
+//plot(fish2, color=#FF6D00, title="Trigger")
+
+fisherbuy = ta.crossover(fish1, fish2) and fish1 < -2
+fishersell = ta.crossunder(fish1, fish2) and fish1 > 2
+
+
+// End fisher
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+
+
+// Triggers
+long_trigger = input(title='Long trigger value', defval=100)
+short_trigger = input(title='Short trigger value', defval=-100)
+trigger = input(title='Enter trigger', defval=close)
+
+// stat time frame inputs
+group_stat_time_frame_inputs_title = "Stat Time Frame Inputs"
+from_month = input.int(defval=5, title='From Month', minval=1, maxval=12, group=group_stat_time_frame_inputs_title)
+from_day = input.int(defval=1, title='From Day', minval=1, maxval=31, group=group_stat_time_frame_inputs_title)
+from_year = input(defval=2021, title='From Year', group=group_stat_time_frame_inputs_title)
+to_month = input.int(defval=12, title='To Month', minval=1, maxval=12, group=group_stat_time_frame_inputs_title)
+to_day = input.int(defval=1, title='To Day', minval=1, maxval=31, group=group_stat_time_frame_inputs_title)
+to_year = input(defval=2024, title='To Year', group=group_stat_time_frame_inputs_title)
+start = timestamp(from_year, from_month, from_day, 00, 00)  // backtest start window
+finish = timestamp(to_year, to_month, to_day, 23, 59)  // backtest finish window
+window = time >= start and time <= finish ? true : false  // create function "within window of time"
+
+// Strat Logic
+var current_so = 0
+var current_S_so = 0
+var initial_order = 0.0
+var initial_S_order = 0.0
+var original_ttp_value = 0.0
+var quantity = 0.0
+var entry_price = 0.0
+var firstBarTime = 0.0
+var maxDiffDays = 0.0
+var soCount = 0
+var SO1 = 0
+var SO2 = 0
+var SO3 = 0
+var SO4 = 0
+var SO5 = 0
+var SO6 = 0
+var SO7 = 0
+var noSO = 0
+var initial_price = 0.0
+var initial_S_price = 0.0
+var price_drop = 0.0
+var price_pump = 0.0
+var max_drop = 0.0
+var max_pump = 0.0
+var pump_date = 0
+var pump_month = 0
+var drop_date = 0
+var drop_month = 0
+var longest_trade_day = 0
+var longest_trade_month = 0
+var take_profit_level = 0.0
+var take_S_profit_level = 0.0
+var tp_plot = 0.0
+var tp_S_plot = 0.0
+var threshold = 0.0
+var S_threshold = 0.0
+timeDiff = time - firstBarTime
+maxDev = 0.0
+maxSDev = 0.0
+closedTrades = 0
+var tradeCount = 0
+var i = 0
+var avg_price = 0.0
+var total_funds_in_trade = 0.0
+var total_qty_in_trade = 0.0
+var capital = 100.0
+
+// Turn that time difference into days
+diffDays = timeDiff / 86400000
+
+// Calculate our TP levels
+take_profit_level := avg_price * (1 + take_profit)
+take_S_profit_level := avg_price * (1 - take_S_profit)
+
+
+// First Position
+for j = 0 to max_safe_order - 1 by 1
+    maxDev := int((maxDev + price_deviation * 100 * math.pow(safe_order_step_scale, j)) * 100) / 100
+    maxDev
+for k = 0 to max_S_safe_order - 1 by 1
+    maxSDev := int((maxSDev + price_S_deviation * 100 * math.pow(safe_S_order_step_scale, k)) * 100) / 100
+    maxSDev
+
+if math.abs(strategy.position_size) != 0 and current_so[1] == 0
+    strategy.close_all()
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+//Long and short entry
+
+//Strategy Inputs
+ADXVMAbuyInput = input.bool(false, "ADXVMA buy")
+HTbuySignalInput = input.bool(true, "HT buy signal")
+//VSLRTbuyInput = input.bool(false, "VSLRT buy")
+//DowBuyFilterInput = input.bool(false, "Dow buy filter")
+fdi_buyConditionInput = input.bool(true, "FDI buy condition")
+fisherbuyInput = input.bool(false, "Fisher buy")
+
+ADXVMAsellInput = input.bool(false, "ADXVMA sell")
+HTsellSignalInput = input.bool(true, "HT sell signal")
+//VSLRTsellInput = input.bool(false, "VSLRT sell")
+//DowSellFilterInput = input.bool(false, "Dow sell filter")
+fdi_sellConditionInput = input.bool(true, "FDI sell condition")
+fishersellInput = input.bool(false, "Fisher sell")
+
+
+
+if (long and strategy.position_size == 0 and source_function(source_type) > 0 and window and not(hour(time) == 0 and minute(time) < 59) and (ADXVMAbuyInput ? ADXVMAbuy : true) and (HTbuySignalInput ? HTbuySignal : true) and (fdi_buyConditionInput ? fdi_buyCondition : true) and (fisherbuyInput ? fisherbuy : true)) //and (DowBuyFilterInput ? DowBuyFilter : true)  and (VSLRTbuyInput ? VSLRTbuy : true)
+    _string_long = ID + ',long,' + syminfo.ticker + '.PRO,risk=' + str.tostring(base_order_lots) + ',comment="entry"'
+    strategy.entry('Long @' + str.tostring(source_function(source_type)), strategy.long, qty=base_order_units, alert_message=_string_long)
+    initial_order := source_function(source_type)
+    current_so := 1
+    initial_price := close
+    price_drop := close
+    original_ttp_value := 0
+    firstBarTime := time
+    tradeCount += 1
+    avg_price := close
+    total_funds_in_trade := avg_price * base_order_units
+    total_qty_in_trade := base_order_units
+    total_qty_in_trade
+
+
+else if (short and strategy.position_size == 0 and source_function(source_type) > 0 and window and not(hour(time) == 0 and minute(time) < 59) and (ADXVMAsellInput ? ADXVMAsell : true) and (HTsellSignalInput ? HTsellSignal : true) and (fdi_sellConditionInput ? fdi_sellCondition : true) and (fishersellInput ? fishersell : true)) //and (DowSellFilterInput ? DowSellFilter : true)  and (VSLRTsellInput ? VSLRTsell : true)
+    _string_short = ID + ',short,' + syminfo.ticker + '.PRO,risk=' + str.tostring(base_S_order_lots) + ',comment="entry"'
+    strategy.entry('Short @' + str.tostring(source_function(source_type)), strategy.short, qty=base_order_units, alert_message=_string_short)
+    initial_S_order := source_function(source_type)
+    current_so := 1
+    firstBarTime := time
+    tradeCount += 1
+    initial_S_price := close
+    price_pump := close
+    avg_price := close
+    total_funds_in_trade := avg_price * base_order_units
+    total_qty_in_trade := base_order_units
+    total_qty_in_trade
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+//makes the red and green line plot pretty at the position opening
+if strategy.position_size == 0
+    threshold := low[1]
+    S_threshold := high[1]
+    S_threshold
+
+//Safety order levels
+
+//Long
+if strategy.position_size > 0 and i == 0
+    if current_so == 1
+        threshold := initial_order - initial_order * price_deviation
+    else if safe_order_step_scale == 1.0
+        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * (current_so - 1)
+    else
+        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale * safe_order_step_scale_factor, current_so - 1) - 1) / (safe_order_step_scale - 1))
+
+//Short
+else if strategy.position_size < 0 and i == 0
+    if current_so == 1
+        S_threshold := initial_S_order * (1 + price_S_deviation)
+    else if safe_S_order_step_scale == 1.0
+        S_threshold := initial_S_order * (1 + price_S_deviation * (current_so - 1))
+    else
+        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale * safe_order_step_scale_factor, current_so - 1) - 1) / (safe_S_order_step_scale - 1))
+
+
+// Average Down
+if current_so > 0 and i == 0 and strategy.position_size > 0 and low <= threshold and current_so <= max_safe_order and not(hour(time) == 0 and minute(time) < 59)
+    so_percent = ((threshold - initial_order) / initial_order) * 100
+    order_qty = safe_order_units * safe_order_volume_scale * safe_order_step_scale_factor * (current_so - 1)
+    order_qty_lots = order_qty / 100000
+    _string_long_so = ID + ',long,' + syminfo.ticker + '.PRO,risk=' + str.tostring(order_qty_lots) + ',comment="entry"'
+    strategy.entry('SO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)) + ' (' + str.tostring(so_percent) + '%)', strategy.long, qty=safe_order_units * math.pow(safe_order_volume_scale * safe_order_step_scale_factor, current_so - 1), alert_message=_string_long_so)
+    
+    total_funds_in_trade += threshold * safe_order_units * math.pow(safe_order_volume_scale * safe_order_step_scale_factor, current_so - 1)
+    total_qty_in_trade += safe_order_units * math.pow(safe_order_volume_scale * safe_order_step_scale_factor, current_so - 1)
+    avg_price := total_funds_in_trade / total_qty_in_trade
+    current_so += 1
+    tradeCount += 1
+
+// Short Average Up
+if current_so > 0 and i == 0 and strategy.position_size < 0 and high >= S_threshold and current_so <= max_S_safe_order and not(hour(time) == 0 and minute(time) < 59)
+    so_percent = ((S_threshold - initial_S_order) / initial_S_order) * 100
+    order_qty = safe_S_order_units * safe_S_order_volume_scale * safe_S_order_step_scale_factor * (current_so - 1)
+    order_qty_lots = order_qty / 100000
+    _string_short_so = ID + ',short,' + syminfo.ticker + '.PRO,risk=' + str.tostring(order_qty_lots) + ',comment="entry"'
+    strategy.entry('SSO ' + str.tostring(current_so) + '@' + str.tostring(source_function(source_type)) + ' (' + str.tostring(so_percent) + '%)', strategy.short, qty=safe_S_order_units * math.pow(safe_S_order_volume_scale * safe_S_order_step_scale_factor, current_so - 1), alert_message=_string_short_so)
+    total_funds_in_trade += S_threshold * safe_S_order_units * math.pow(safe_S_order_volume_scale * safe_S_order_step_scale_factor, current_so - 1)
+    total_qty_in_trade += safe_S_order_units * math.pow(safe_S_order_volume_scale * safe_S_order_step_scale_factor, current_so - 1)
+    avg_price := total_funds_in_trade / total_qty_in_trade
+    current_so += 1
+    tradeCount += 1         
+
+// Take Profit! 
+if i == 1 and not(hour(time) == 0 and minute(time) < 59)
+    _string_close = ID + ',closelong,' + syminfo.ticker + '.PRO,comment="entry"'
+    strategy.close_all(alert_message = _string_close)
+    i := 0
+    i
+
+if take_profit_level <= high and strategy.position_size > 0 and not(hour(time) == 0 and minute(time) < 59)
+    _string_take_profit = ID + ',closelong,' + syminfo.ticker + '.PRO,comment="entry"'
+    strategy.close_all(comment='Close @' + str.tostring(source_function(source_type)), alert_message = _string_take_profit)
+    soCount := current_so
+    current_so := 0
+    original_ttp_value := 0
+    price_drop := na
+    initial_price := na
+    diffDays := time - firstBarTime
+    if diffDays > maxDiffDays
+        maxDiffDays := diffDays
+        longest_trade_day := dayofmonth
+        longest_trade_month := month
+        longest_trade_month
+    i := 1
+    initial_order := 0.0
+    avg_price := na
+    capital *= (1 + total_qty_in_trade * take_profit / 100)
+    capital
+
+// Take Short Profit! 
+if take_S_profit_level >= low and strategy.position_size < 0 and not(hour(time) == 0 and minute(time) < 59)
+    _string_take_short_profit = ID + ',closeshort,' + syminfo.ticker + '.PRO,comment="entry"'
+    strategy.close_all(comment='Close Short @' + str.tostring(source_function(source_type)), alert_message = _string_take_short_profit)
+    soCount := current_so
+    current_so := 0
+    price_pump := na
+    initial_S_price := na
+    diffDays := time - firstBarTime
+    if diffDays > maxDiffDays
+        maxDiffDays := diffDays
+        maxDiffDays
+    initial_S_order := 0.0
+    avg_price := na
+    capital *= (1 + total_qty_in_trade * take_S_profit / 100)
+    capital
+
+//Table building and calculations
+if strategy.position_size == 0
+    if soCount == 1
+        noSO += 1
+        noSO
+    else if soCount == 2
+        SO1 += 1
+        SO1
+    else if soCount == 3
+        SO2 += 1
+        SO2
+    else if soCount == 4
+        SO3 += 1
+        SO3
+    else if soCount == 5
+        SO4 += 1
+        SO4
+    else if soCount == 6
+        SO5 += 1
+        SO5
+    else if soCount == 7
+        SO6 += 1
+        SO6
+    else if soCount == 8
+        SO7 += 1
+        SO7
+    soCount := 0
+    soCount
+closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
+
+if low < price_drop and window and strategy.position_size > 0
+    price_drop := low
+    if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
+        max_drop := int((1 - price_drop / initial_price) * 10000) / 100
+        drop_date := dayofmonth(time)
+        drop_month := month(time)
+        drop_month
+bgcolor(max_drop[1] < max_drop ? color.new(color.rgb(0, 187, 212), 95) : na)
+
+if high > price_pump and window and strategy.position_size < 0
+    price_pump := high
+    if max_pump < int((price_pump / initial_S_price - 1) * 10000) / 100
+        max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
+        pump_date := dayofmonth(time)
+        pump_month := month(time)
+        pump_month
+bgcolor(max_pump[1] < max_pump ? color.new(color.rgb(155, 39, 176), 70) : na)
+
+if take_profit_level > 0 and strategy.position_size > 0
+    tp_plot := take_profit_level
+    tp_plot
+else
+    tp_plot := close
+    tp_plot
+
+if take_S_profit_level > 0 and strategy.position_size < 0
+    tp_S_plot := take_S_profit_level
+    tp_S_plot
+else
+    tp_S_plot := close
+    tp_S_plot
+
+//Plotting the levels
+p1 = plot(tp_plot, color=strategy.position_size <= 0 ? na : #00ff00)
+p2 = plot(avg_price, color=strategy.position_size == 0 ? na : color.white)
+p3 = plot(threshold, color=strategy.position_size <= 0 ? na : #ff0000)
+p4 = plot(tp_S_plot, color=strategy.position_size >= 0 ? na : #00ff00)
+p5 = plot(S_threshold, color=strategy.position_size >= 0 ? na : #ff0000)
+fill(p1, p2, color=strategy.position_size > 0 ? color.new(color.rgb(19, 231, 221), 90) : na)
+fill(p2, p3, color=strategy.position_size > 0 ? color.new(color.rgb(255, 82, 82), 95) : na)
+fill(p4, p2, color=strategy.position_size < 0 ? color.new(color.rgb(19, 231, 221), 90) : na)
+fill(p5, p2, color=strategy.position_size < 0 ? color.new(color.rgb(255, 82, 82), 95) : na)
+profit_color = strategy.openprofit < 0 ? color.red : color.green
+
+text_size = text_size_switch ? size.small : size.normal
+
+// plot(strategy.opentrades)
+// plot(current_so, color = color.yellow)
+// plot(abs(strategy.position_size), color = color.red)
+// plot(quantity, color=color.purple)
+
+//Table formatting
+if show_table
+    var Table = table.new(position.bottom_right, columns=2, rows=20, border_width=1, bgcolor=color.black, border_color=color.gray)
+    table.cell(table_id=Table, column=0, row=0, text_color=color.gray, text_size=text_size, text='Net Profit')
+    table.cell(table_id=Table, column=1, row=0, text=str.tostring(int((capital - 100) * 100) / 100) + '%', text_size=text_size, text_color=color.lime)
+    table.cell(table_id=Table, column=0, row=1, text_color=color.gray, text_size=text_size, text='Max Deviation ')
+    table.cell(table_id=Table, column=1, row=1, text=str.tostring(maxDev) + '%', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=0, row=2, text_color=color.gray, text_size=text_size, text='Max Short Dev ')
+    table.cell(table_id=Table, column=1, row=2, text=str.tostring(maxSDev) + '%', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=0, row=3, text='No SO ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=3, text=str.tostring(noSO), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=4, text='SO 1 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=4, text=str.tostring(SO1), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=5, text='SO 2 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=5, text=str.tostring(SO2), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=6, text='SO 3 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=6, text=str.tostring(SO3), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=7, text='SO 4 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=7, text=str.tostring(SO4), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=8, text='SO 5 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=8, text=str.tostring(SO5), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=9, text='SO 6 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=9, text=str.tostring(SO6), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=10, text='SO 7 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=10, text=str.tostring(SO7), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=11, text='Closed/Open trades', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=11, text=str.tostring(strategy.closedtrades) + '/' + str.tostring(strategy.opentrades), text_size=text_size, text_color=color.olive)
+    table.cell(table_id=Table, column=0, row=12, text='Current Deal Time', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=12, text=strategy.position_size != 0 ? str.tostring(int((time - firstBarTime) / 8640000) / 10) + ' days' : '0', text_size=text_size, text_color=color.green)
+    table.cell(table_id=Table, column=0, row=13, text='Unrealized position', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=13, text=str.tostring(int(strategy.openprofit / (strategy.initial_capital + strategy.netprofit) * 10000) / 100) + ' %', text_size=text_size, text_color=profit_color)
+    table.cell(table_id=Table, column=0, row=14, text='Longest deal:', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=1, row=14, text=str.tostring(int(maxDiffDays / 8640000) / 10) + ' days, ' + str.tostring(longest_trade_day) + '/' + str.tostring(longest_trade_month), text_size=text_size, text_color=color.red)
+    table.cell(table_id=Table, column=0, row=15, text='Max price drop:', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=1, row=15, text=str.tostring(max_drop) + ' %, ' + str.tostring(drop_date) + '/' + str.tostring(drop_month), text_size=text_size, text_color=color.red)
+    table.cell(table_id=Table, column=0, row=16, text='Max price pump:', text_size=text_size, text_color=color.orange)
+    table.cell(table_id=Table, column=1, row=16, text=str.tostring(max_pump) + ' %, ' + str.tostring(pump_date) + '/' + str.tostring(pump_month), text_size=text_size, text_color=color.red)

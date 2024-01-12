@@ -1,0 +1,700 @@
+//@version=5
+strategy('TTB DCA 7.4', overlay=true, initial_capital=1000000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false)
+
+import thetradingbot/ttbcolors/1 as TTBColors
+import thetradingbot/TTB_TableBuilder/1 as TTBTableBuilder
+
+// f_security function for MTF
+f_security(_sym, _res, _src, _rep) =>
+    request.security(_sym, _res, _src[not _rep and barstate.isrealtime ? 1 : 0])[_rep or barstate.isrealtime ? 0 : 1]
+var bool i_repaint = false // Set to false to avoid repainting
+var string ticker = syminfo.tickerid
+
+direction = input.string(defval='Long', title='Trading Direction', options=['All', 'Long', 'Short'])
+direction_text = direction == 'Long' ? 'L' : 'S'
+truncate(number, decimals) =>
+    factor = math.pow(10, decimals)
+    int(number * factor) / factor
+
+var long = false
+var short = true
+
+if direction == 'All'
+    long := true
+    short := true
+    short
+else if direction == 'Long'
+    long := true
+    short := false
+    short
+else if direction == 'Short'
+    long := false
+    short := true
+    short
+
+// Strategy Inputs
+groupTitleGeneralInputs = "General Inputs"
+ID = 6700960415957
+show_table = input(true, title='Show table', group = groupTitleGeneralInputs)
+text_size_switch = true
+HTF1= input('15', title='HTF1', group = groupTitleGeneralInputs)
+HTF2= input('30', title='HTF2', group = groupTitleGeneralInputs)
+HTF3= input('60', title='HTF3', group = groupTitleGeneralInputs)
+HTF4= input('240', title='HTF4', group = groupTitleGeneralInputs)
+HTF5= input('D', title='HTF5', group = groupTitleGeneralInputs)
+MinSOBars = input(100, title="Min Bars Between SOs", group = groupTitleGeneralInputs)
+version = input(defval='7-4', title='version', group = groupTitleGeneralInputs)
+test = input(defval='1', title='test', group = groupTitleGeneralInputs)
+// Triggers
+long_trigger = input(title='Long trigger value', defval=1, group = groupTitleGeneralInputs)
+short_trigger = input(title='Short trigger value', defval=-1, group = groupTitleGeneralInputs)
+trigger = input(defval=close, title="Enter trigger", group = groupTitleGeneralInputs)
+//trigger = close
+
+//Recovery Inputs
+groupTitleRecoveryInputs = "Recovery Inputs"
+recovery_mode = input.bool(false, title='Recovery Mode', group = groupTitleRecoveryInputs)
+avg_entry_price = input(1.0, "Average Entry Price", group = groupTitleRecoveryInputs)
+waitBars = input(100, title="Number of Bars to Wait After Entry for SO", group = groupTitleRecoveryInputs)
+AvgPrice_Entry = ta.cross(close, avg_entry_price)
+
+// Date Ranges
+startDateTime = input.time(timestamp("1 Feb 2021 12:00"), title="Start", group="Strategy Date Range")
+endDateTime = input.time(timestamp("1 Feb 2025 12:00"), title="End", group="Strategy Date Range")
+window = time >= startDateTime and time <= endDateTime ? true : false 
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// ATRP
+atrp_length = input.int(75, title='ATRP Length', minval=1, group = groupTitleGeneralInputs)
+
+// Declare variables
+var trp = float(0)
+var atrp = float(0)
+
+// Calculate true range percent
+trp := ta.tr / hl2 * 100
+
+round_to(n, decimals) =>
+    mult = 1.0
+    for i = 1 to decimals
+        mult := mult * 10
+    round_n = na(n * mult + 0.5) ? na : (n * mult + 0.5) - (n * mult + 0.5) % 1
+    round_n / mult
+
+// Calculate smoothed percentage range
+atrp := round_to(ta.sma(trp, atrp_length), 4)
+
+//atrp_htf1 = f_security(ticker, HTF1, atrp, i_repaint)
+atrp_htf1 = round_to(f_security(ticker, HTF1, atrp, i_repaint), 4)
+plot(atrp, title='ATRP', color=color.rgb(255, 177, 20, 94), linewidth=1, style=plot.style_linebr)
+//end atrp
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+// atr
+atr_length = 100
+ma_function(_source, _length) => ta.rma(_source, _length)
+avg_atr = round_to(ma_function(ta.tr, atr_length), 7)
+plot(ma_function(ta.tr(true), atr_length), title = "ATR", color=color.new(#B71C1C, 0))
+//end atr
+
+groupTitleInputs = "Inputs"
+so_dev_factor = input.float(1.8, title='SO Deviation Factor', step=0.1, minval=0.0, group = groupTitleInputs)
+tp_factor = input.float(3.3, title='TP ATRP Factor', step=0.1, minval=0.0, group = groupTitleInputs)
+lots = input.float(0.5, "Entry / Recovery (Lots)", group = groupTitleInputs)
+SO_lots = input.float(0.5, "SO Lots", group = groupTitleInputs)
+SO_volume_scale = input.float(1, step=0.1, title='SO Volume Scale', group = groupTitleInputs)
+SO_step_scale = input.float(1.5, step=0.1, title='SO Step Distance Scale', group = groupTitleInputs)
+max_SOs = input(6, title='Max SOs', group = groupTitleInputs)
+input_bars_to_wait = input(1, title="TP Number of bars to wait after SO", group = groupTitleInputs)
+
+// Calculate common parameters for longs and shorts
+price_deviation = so_dev_factor * atrp / 100
+take_profit = tp_factor * atrp / 100
+base_order_lots = lots
+base_order = base_order_lots * 100000
+safe_order_lots = SO_lots
+safe_order = SO_lots * 100000
+max_safe_order = max_SOs
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+// Structure
+groupTitleStructureSettings = "Structure Settings"
+MSlength  = input(10, 'Pivot Lookback', group = groupTitleStructureSettings)
+incr    = input.float(95, 'Increment Factor %', minval = 0, group = groupTitleStructureSettings)
+showStrucPlots  = input(true, "Show Struc Plots", group = groupTitleStructureSettings)
+
+resetOn = 'CHoCH'
+
+//Style 
+bullCss    = color.rgb(7, 232, 187, 34)
+bearCss    = color.rgb(250, 36, 214, 37)
+retCss     = #ffbb00
+areaTransp = 90
+
+//structure Global variables
+var float ph_y = na , var int ph_x = na
+var float pl_y = na , var int pl_x = na
+var float top = na  , var float btm = na
+var ph_cross = false, var pl_cross = false
+
+var float max = na
+var float min = na
+var float ts = na
+
+var os = 0
+ms = 0
+
+//Detect pivots and get coordinates
+n = bar_index
+ph = ta.pivothigh(MSlength, MSlength)
+pl = ta.pivotlow(MSlength, MSlength)
+
+if ph > 0
+    ph_y := ph
+    ph_x := n - MSlength
+    ph_cross := false
+
+if pl > 0
+    pl_y := pl
+    pl_x := n - MSlength
+    pl_cross := false
+
+//Bullish structures
+if close > ph_y and not ph_cross
+    if resetOn == 'CHoCH'
+        ms := os == -1 ? 1 : 0
+    else
+        ms := 1
+
+    ph_cross := true
+
+
+    os := 1
+
+    //Search for local minima
+    btm := low
+    for i = 0 to (n - ph_x)-1
+        btm := math.min(low[i], btm)
+
+    osChange = os != os[1]
+
+//Bearish structures
+if close < pl_y and not pl_cross
+    if resetOn == 'CHoCH'
+        ms := os == 1 ? -1 : 0
+    else
+        ms := -1
+
+    pl_cross := true
+
+    os := -1
+
+    //Search for local maxima
+    top := high
+    for i = 0 to (n - pl_x)-1
+        top := math.max(high[i], top)
+
+    osChange = os != os[1]
+
+//Trailing stop max/min
+if ms == 1
+    max := close
+else if ms == -1
+    min := close
+else
+    max := math.max(close, max)
+    min := math.min(close, min)
+
+//Trailing stop
+ts := ms == 1 ? btm
+  : ms == -1 ? top
+  : os == 1 ? ts + (max - max[1]) * incr / 100
+  : ts + (min - min[1]) * incr / 100
+
+//Plots
+css = (ms > 0) ? na 
+  : os == 1 ? bullCss
+  : bearCss
+
+plot_ts    = plot(showStrucPlots ? ts : na, 'Trailing Stop', color = css)
+
+// plot the trailing stops
+ts_htf1 = f_security(ticker, HTF1, ts, i_repaint)
+plot_ys_htf1 = plot(showStrucPlots ? ts_htf1 : na, 'HTF1 Trailing Stop', color=color.rgb(255, 177, 20, 71))
+
+ts_htf2 = f_security(ticker, HTF2, ts, i_repaint)
+plot_ts_htf2 = plot(showStrucPlots ? ts_htf2 : na, 'HTF2 Trailing Stop', color=color.rgb(244, 252, 7, 46))
+
+ts_htf3 = f_security(ticker, HTF3, ts, i_repaint)
+plot_ts_htf3 = plot(showStrucPlots ? ts_htf3 : na, 'HTF3 Trailing Stop', color=color.rgb(239, 255, 20, 82))
+
+ts_htf4 = f_security(ticker, HTF4, ts, i_repaint)
+plot_ts_htf4 = plot(showStrucPlots ? ts_htf4 : na, 'HTF4 Trailing Stop', color=color.rgb(153, 255, 20, 74))
+
+css_area = (close - ts) * os < 0 ? retCss
+  : css
+
+osChange = os != os[1]
+
+trendUp = os == 1 and osChange
+trendDown = os == -1 and osChange
+
+trendingUp = os == 1
+trendingDown = os == -1
+
+//MTF os
+os_htf1 = f_security(ticker, HTF1, os, i_repaint)
+os_htf2 = f_security(ticker, HTF2, os, i_repaint)
+os_htf3 = f_security(ticker, HTF3, os, i_repaint)
+trendingUpHTF1 = os_htf1 == 1
+trendingDownHTF1 = os_htf1 == -1
+trendingUpHTF2 = os_htf2 == 1
+trendingDownHTF2 = os_htf2 == -1
+trendingUpHTF3 = os_htf3 == 1
+trendingDownHTF3 = os_htf3 == -1
+
+above_ts_htf1 = close > ts_htf1
+below_ts_htf1 = close < ts_htf1
+above_ts_htf2 = close > ts_htf2
+below_ts_htf2 = close < ts_htf2
+above_ts_htf3 = close > ts_htf3
+below_ts_htf3 = close < ts_htf3
+// end structure
+
+
+
+// variables
+var current_so = 0
+var current_S_so = 0
+var initial_order = 0.0
+var initial_S_order = 0.0
+var original_ttp_value = 0.0
+var quantity = 0.0
+var entry_price = 0.0
+var firstBarTime = 0.0
+var maxDiffDays = 0.0
+var soCount = 0
+var SO1 = 0
+var SO2 = 0
+var SO3 = 0
+var SO4 = 0
+var SO5 = 0
+var SO6 = 0
+var SO7 = 0
+var noSO = 0
+var initial_price = 0.0
+var initial_S_price = 0.0
+var price_drop = 0.0
+var price_pump = 0.0
+var max_drop = 0.0
+var max_pump = 0.0
+var pump_date = 0
+var pump_month = 0
+var drop_date = 0
+var drop_month = 0
+var longest_trade_day = 0
+var longest_trade_month = 0
+var take_profit_level = 0.0
+var take_S_profit_level = 0.0
+var tp_plot = 0.0
+var tp_S_plot = 0.0
+var threshold = 0.0
+var S_threshold = 0.0
+timeDiff = time - firstBarTime
+maxDev = 0.0
+maxSDev = 0.0
+closedTrades = 0
+var tradeCount = 0
+var i = 0
+var avg_price = 0.0
+var total_funds_in_trade = 0.0
+var total_qty_in_trade = 0.0
+var capital = 100.0
+
+// Turn that time difference into days
+diffDays = timeDiff / 86400000
+
+// Calculate our TP levels
+take_profit_level := strategy.position_size > 0 ? avg_price * (1 + take_profit) : avg_price * (1 - take_profit)
+
+var int entry_bar_index = na
+var int last_so_bar = na
+
+// Variables to track entry and bars since entry
+var barCountSinceEntry = 0
+var entrySignal = false
+
+// track bars since last SO
+var int last_so_bar_index = na
+var bool waitXbarsTP = na
+waitXbarsTP := na(last_so_bar_index) ? na : last_so_bar_index + input_bars_to_wait
+
+doneSOwaiting = barCountSinceEntry > waitBars
+
+min_bars_between_sos = MinSOBars // Minimum number of bars between SOs
+
+so_multiplier_4 = input(1.5, title="Multiplier for SO4", group = groupTitleInputs)
+so_multiplier_5_6 = input(2.0, title="Multiplier for SO5 and SO6", group = groupTitleInputs)
+so_multiplier = current_so == 4 ? so_multiplier_4 : current_so >= 5 and current_so <= 6 ? so_multiplier_5_6 : 1
+// end variables
+
+//Long and short entry
+///Strategy Inputs
+groupTitleLongEntry = "Long Entry"
+trigger_long_Input = input.bool(false, "Trigger Long", group = groupTitleLongEntry)
+Struc_trigger_long_Input = input.bool(false, "Struc Trigger Long", group = groupTitleLongEntry)
+
+groupTitleLongFilters = "Long Filters"
+above_ts_htf1_filter = input.bool(false, "Use hft1 long trend filter", group = groupTitleLongFilters)
+above_ts_htf2_filter = input.bool(false, "Use hft2 long trend filter", group = groupTitleLongFilters)
+above_ts_htf3_filter = input.bool(false, "Use hft3 long trend filter", group = groupTitleLongFilters)
+above_ts_htf4_filter = input.bool(false, "Use hft4 long trend filter", group = groupTitleLongFilters)
+above_ts_htf5_filter = input.bool(false, "Use hft5 long trend filter", group = groupTitleLongFilters)
+
+groupTitleShortEntry = "Short Entry"
+trigger_short_Input = input.bool(false, "Trigger Short", group = groupTitleShortEntry)
+Struc_trigger_short_Input = input.bool(false, "Struc Trigger Short", group = groupTitleShortEntry)
+
+groupTitleShortFilters = "Short Filters"
+below_ts_htf1_filter = input.bool(false, "Use hft1 short trend filter", group = groupTitleShortFilters)
+below_ts_htf2_filter = input.bool(false, "Use hft2 short trend filter", group = groupTitleShortFilters)
+below_ts_htf3_filter = input.bool(false, "Use hft3 short trend filter", group = groupTitleShortFilters)
+below_ts_htf4_filter = input.bool(false, "Use hft4 short trend filter", group = groupTitleShortFilters)
+below_ts_htf5_filter = input.bool(false, "Use hft5 short trend filter", group = groupTitleShortFilters)
+
+groupTitleSOsExitLong = "Long SOs and Exit"
+threshold_long_filter = input.bool(false, "threshold long trend filter for SO", group = groupTitleSOsExitLong)
+trendUp_triggerSO = input.bool(false, "trendUp long trend trigger for SO", group = groupTitleSOsExitLong)
+trendingUp_filterSO = input.bool(false, "trendingUp long trend filter for SO", group = groupTitleSOsExitLong)
+above_ts_htf1_filterSO = input.bool(false, "Use hft1 long trend filter for SO", group = groupTitleSOsExitLong)
+above_ts_htf2_filterSO = input.bool(false, "Use hft2 long trend filterfor SO", group = groupTitleSOsExitLong)
+above_ts_htf3_filterSO = input.bool(false, "Use hft3 long trend filter for SO", group = groupTitleSOsExitLong)
+above_ts_htf4_filterSO = input.bool(false, "Use hft4 long trend filter for SO", group = groupTitleSOsExitLong)
+above_ts_htf5_filterSO = input.bool(false, "Use hft5 long trend filter for SO", group = groupTitleSOsExitLong)
+
+groupTitleSOsExitShort = "Short SOs and Exit"
+threshold_short_filter = input.bool(false, "threshold short trend filter for SO", group = groupTitleSOsExitShort)
+trendDown_triggerSO = input.bool(false, "trendDown short trend trigger for SO", group = groupTitleSOsExitShort)
+trendingDown_filterSO = input.bool(false, "trendingDown short trend filter for SO", group = groupTitleSOsExitShort)
+below_ts_htf1_filterSO = input.bool(false, "Use hft1 short trend filter for SO", group = groupTitleSOsExitShort)
+below_ts_htf2_filterSO = input.bool(false, "Use hft2 short trend filter for SO", group = groupTitleSOsExitShort)
+below_ts_htf3_filterSO = input.bool(false, "Use hft3 short trend filter for SO", group = groupTitleSOsExitShort)
+below_ts_htf4_filterSO = input.bool(false, "Use hft4 short trend filter for SO", group = groupTitleSOsExitShort)
+below_ts_htf5_filterSO = input.bool(false, "Use hft5 short trend filter for SO", group = groupTitleSOsExitShort)
+
+groupTitleTPconditions = "TP Conditions"
+waitXbarsTPcondition = input.bool(false, "Wait X bars after SO for TP", group = groupTitleTPconditions)
+
+// First Position
+for j = 0 to max_safe_order - 1 by 1
+    maxDev := int((maxDev + price_deviation * 100 * math.pow(SO_step_scale, j)) * 100) / 100
+    maxDev
+for j = 0 to max_safe_order - 1 by 1
+    maxSDev := int((maxSDev + price_deviation * 100 * math.pow(SO_step_scale, j)) * 100) / 100
+    maxSDev
+
+//strategy.close_all(math.abs(strategy.position_size) != 0 and current_so[1] == 0)
+if math.abs(strategy.position_size) != 0 and current_so[1] == 0
+    strategy.close_all()
+
+var int longEntryBarIndex = na 
+var int shortEntryBarIndex = na
+
+// Calculate the hit conditions for the thresholds
+threshold_hit = low <= threshold
+S_threshold_hit = high >= S_threshold
+
+// Calculate the total funds in trade and total quantity in trade
+total_funds_in_trade := avg_price * base_order_lots * 100000
+total_qty_in_trade := base_order_lots * 100000
+
+// long entry
+if long and 
+   strategy.position_size == 0 and 
+   close > 0 and 
+   window and not(hour(time) == 0 and 
+   minute(time) < 59) and 
+   (recovery_mode ? AvgPrice_Entry : true) and
+   (trigger_long_Input ? trigger == long_trigger : true) and 
+   (Struc_trigger_long_Input ? trendUp : true) and 
+   (above_ts_htf3_filter ? above_ts_htf3 : true) 
+    _string_long = 'type=order,order-type=long,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '",entry=true'
+    strategy.entry('Long @' + str.tostring(close), strategy.long, qty=base_order, alert_message=_string_long)
+    initial_order := close
+    current_so := 1
+    initial_price := close
+    price_drop := close
+    original_ttp_value := 0
+    firstBarTime := time
+    tradeCount += 1
+    avg_price := close
+    total_funds_in_trade := avg_price * base_order_lots * 100000
+    total_qty_in_trade := base_order_lots * 100000
+    entry_bar_index := bar_index
+    entrySignal := true
+    barCountSinceEntry := 0  // Reset the counter at entry
+    last_so_bar_index := na
+    log.info("Average price after Entry updated: {0}, Total funds in trade: {1}, Total quantity in trade: {2}", avg_price, total_funds_in_trade, total_qty_in_trade)
+//short entry
+else if short and 
+   strategy.position_size == 0 and 
+   close > 0 and window and 
+   not(hour(time) == 0 and minute(time) < 59) and 
+   (recovery_mode ? AvgPrice_Entry : true) and
+   (trigger_short_Input ? trigger == short_trigger : true) and 
+   (Struc_trigger_short_Input ? trendDown : true) and 
+   (below_ts_htf3_filter ? below_ts_htf3 : true)
+    _string_short = 'type=order,order-type=short,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '",entry=true'
+    strategy.entry('Short @' + str.tostring(close), strategy.short, qty=base_order, alert_message=_string_short)
+    initial_S_order := close
+    current_so := 1
+    firstBarTime := time
+    tradeCount += 1
+    initial_S_price := close
+    price_pump := close
+    avg_price := close
+    total_funds_in_trade := avg_price * base_order_lots * 100000
+    total_qty_in_trade := base_order_lots * 100000
+    entry_bar_index := bar_index
+    entrySignal := true
+    barCountSinceEntry := 0  // Reset the counter at entry
+    last_so_bar_index := na
+
+// Update bar counter on each bar if there was an entry
+if entrySignal
+    barCountSinceEntry += 1
+
+// Plot the bar count for visualization
+plot(barCountSinceEntry, title="Bars Since Entry", color = color.rgb(7, 232, 187, 100))
+
+//makes the red and green line plot pretty at the position opening
+if strategy.position_size == 0
+    threshold := low[1]
+    S_threshold := high[1]
+    S_threshold
+
+// Calculate the threshold for long and short positions
+threshold := initial_order - initial_order * price_deviation * math.pow(SO_step_scale, current_so - 1)
+S_threshold := initial_S_order * (1 + price_deviation * math.pow(SO_step_scale, current_so - 1))
+
+// Execute a long safety order if conditions are met
+if current_so > 0 and 
+   i == 0 and 
+   strategy.position_size > 0 and 
+   current_so <= max_safe_order and 
+   not(hour(time) == 0 and minute(time) < 59) and 
+   (threshold_long_filter ? threshold_hit : true) and 
+   (recovery_mode ? barCountSinceEntry > waitBars : true) and 
+   (na(last_so_bar) or bar_index > last_so_bar + min_bars_between_sos) and 
+   (trendUp_triggerSO ? trendUp : true) and
+   (trendingUp_filterSO ? trendingUp : true) and 
+   (above_ts_htf3_filterSO ? above_ts_htf3 : true)
+    _string_long_so = 'type=order,order-type=long,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(SO_lots * so_multiplier * math.pow(SO_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '",entry=false'
+    strategy.entry('SO ' + str.tostring(current_so) + '@' + str.tostring(close), strategy.long, qty=safe_order * so_multiplier * math.pow(SO_volume_scale, current_so - 1), alert_message=_string_long_so)
+    last_so_bar_index := bar_index
+    total_funds_in_trade := total_funds_in_trade + threshold * base_order * so_multiplier * math.pow(SO_volume_scale, current_so - 1)
+    total_qty_in_trade := total_qty_in_trade + base_order * so_multiplier * math.pow(SO_volume_scale, current_so - 1)
+    avg_price := total_funds_in_trade / total_qty_in_trade
+    current_so += 1
+    tradeCount += 1
+    last_so_bar := bar_index // Update the bar index when an SO is executed
+    log.info("Average price after SO #{0} updated: {1}, Total funds in trade: {2}, Total quantity in trade: {3}, Safe order: {4}, SO multiplier: {5}, SO volume scale: {6}, Take Profit Level: {7}", current_so, avg_price, total_funds_in_trade, total_qty_in_trade, safe_order, so_multiplier, SO_volume_scale, take_profit_level)
+
+// Execute a short safety order for short positions if conditions are met
+if current_so > 0 and 
+   i == 0 and 
+   strategy.position_size < 0 and 
+   current_so <= max_safe_order and 
+   not(hour(time) == 0 and minute(time) < 59) and 
+   (threshold_short_filter ? S_threshold_hit : true) and 
+   (recovery_mode ? barCountSinceEntry > waitBars : true) and 
+   (na(last_so_bar) or bar_index > last_so_bar + min_bars_between_sos) and 
+   (trendDown_triggerSO ? trendDown : true) and
+   (trendingDown_filterSO ? trendingDown : true) and 
+   (below_ts_htf3_filterSO ? below_ts_htf3 : true) 
+    _string_short_so = 'type=order,order-type=short,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(SO_lots * so_multiplier * math.pow(SO_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '",entry=false'
+    strategy.entry('SSO ' + str.tostring(current_so) + '@' + str.tostring(close), strategy.short, qty=safe_order * so_multiplier * math.pow(SO_volume_scale, current_so - 1), alert_message=_string_short_so)
+    last_so_bar_index := bar_index
+    total_funds_in_trade := total_funds_in_trade + avg_price * safe_order * so_multiplier * math.pow(SO_volume_scale, current_so - 1)
+    total_qty_in_trade := total_qty_in_trade + safe_order * so_multiplier * math.pow(SO_volume_scale, current_so - 1)
+    avg_price := total_funds_in_trade / total_qty_in_trade
+    current_so += 1
+    tradeCount += 1
+    last_so_bar := bar_index // Update the bar index when an SO is executed
+
+// Take Profit! 
+if i == 1
+    strategy.close_all() // Close all positions
+    i := 0 // Reset the counter
+    i
+
+// If the take profit level is reached and the position is long, close the trade
+if take_profit_level <= high and 
+   strategy.position_size > 0 and 
+   not(hour(time) == 0 and 
+   minute(time) < 59) and
+   (waitXbarsTPcondition ? waitXbarsTP : true)
+    _string_close_long = 'type=order,order-type=closelong,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"' // Prepare the close long order string
+    strategy.close_all(comment='Close @' + str.tostring(close), alert_message=_string_close_long) // Close the long position
+    soCount := current_so // Save the current scale-out count
+    current_so := 0 // Reset the current scale-out count
+    original_ttp_value := 0 // Reset the original take profit value
+    price_drop := na // Reset the price drop value
+    initial_price := na // Reset the initial price
+    diffDays := time - firstBarTime // Calculate the difference in days
+    if diffDays > maxDiffDays // If the difference in days is greater than the maximum difference in days
+        maxDiffDays := diffDays // Update the maximum difference in days
+        longest_trade_day := dayofmonth // Update the longest trade day
+        longest_trade_month := month // Update the longest trade month
+        longest_trade_month
+    i := 1 // Reset the counter
+    initial_order := 0.0 // Reset the initial order
+    avg_price := na // Reset the average price
+    capital *= (1 + total_qty_in_trade * take_profit / 100) // Update the capital
+    entry_bar_index := na
+    entrySignal := false
+
+// Take Short Profit! 
+// If the take short profit level is reached and the position is short, close the trade
+if take_profit_level >= low and 
+   strategy.position_size < 0 and 
+   not(hour(time) == 0 and 
+   minute(time) < 59) and
+   (waitXbarsTPcondition ? waitXbarsTP : true)
+    _string_close_short = 'type=order,order-type=closeshort,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"' // Prepare the close short order string
+    strategy.close_all(comment='Close Short @' + str.tostring(close), alert_message=_string_close_short) // Close the short position
+    soCount := current_so // Save the current scale-out count
+    current_so := 0 // Reset the current scale-out count
+    price_pump := na // Reset the price pump value
+    initial_S_price := na // Reset the initial short price
+    diffDays := time - firstBarTime // Calculate the difference in days
+    if diffDays > maxDiffDays // If the difference in days is greater than the maximum difference in days
+        maxDiffDays := diffDays // Update the maximum difference in days
+        maxDiffDays
+    initial_S_order := 0.0 // Reset the initial short order
+    avg_price := na // Reset the average price
+    capital *= (1 + total_qty_in_trade * take_profit / 100) // Update the capital
+    entry_bar_index := na
+    entrySignal := false
+
+
+//Table building and calculations
+if strategy.position_size == 0
+    if soCount == 1
+        noSO += 1
+        noSO
+    else if soCount == 2
+        SO1 += 1
+        SO1
+    else if soCount == 3
+        SO2 += 1
+        SO2
+    else if soCount == 4
+        SO3 += 1
+        SO3
+    else if soCount == 5
+        SO4 += 1
+        SO4
+    else if soCount == 6
+        SO5 += 1
+        SO5
+    else if soCount == 7
+        SO6 += 1
+        SO6
+    else if soCount == 8
+        SO7 += 1
+        SO7
+    soCount := 0
+    soCount
+closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
+
+if low < price_drop and window and strategy.position_size > 0
+    price_drop := low
+    if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
+        max_drop := int((1 - price_drop / initial_price) * 10000) / 100
+        drop_date := dayofmonth(time)
+        drop_month := month(time)
+        drop_month
+bgcolor(max_drop[1] < max_drop ? color.new(#0b5a64, 94) : na)
+
+if high > price_pump and window and strategy.position_size < 0
+    price_pump := high
+    if max_pump < int((price_pump / initial_S_price - 1) * 10000) / 100
+        max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
+        pump_date := dayofmonth(time)
+        pump_month := month(time)
+        pump_month
+bgcolor(max_pump[1] < max_pump ? color.new(#9b27b0, 89) : na)
+
+if take_profit_level > 0 and strategy.position_size > 0
+    tp_plot := take_profit_level
+else
+    tp_plot := close
+
+if take_profit_level > 0 and strategy.position_size < 0
+    tp_S_plot := take_profit_level
+else
+    tp_S_plot := close
+
+//Plotting the levels
+p1 = plot(tp_plot, color=strategy.position_size <= 0 ? na : TTBColors.colorUp()) // Up color
+p2 = plot(avg_price, color=strategy.position_size == 0 ? na : TTBColors.colorNeutral()) // Neutral color
+p3 = plot(threshold, color=strategy.position_size <= 0 ? na : TTBColors.colorDown()) // Down color
+p4 = plot(tp_S_plot, color=strategy.position_size >= 0 ? na : TTBColors.colorUpPlus()) // UpPlus color
+p5 = plot(S_threshold, color=strategy.position_size >= 0 ? na : TTBColors.colorDownPlus()) // DownPlus color
+fill(p1, p2, color=strategy.position_size > 0 ? color.new(TTBColors.colorUp(), 90) : na) // Semi-transparent Up color
+fill(p2, p3, strategy.position_size > 0 ? color.new(TTBColors.colorNeutral(), 90) : na) // Semi-transparent Neutral color
+fill(p4, p2, color=strategy.position_size < 0 ? color.new(TTBColors.colorUpPlus(), 90) : na) // Semi-transparent UpPlus color
+fill(p5, p2, color=strategy.position_size < 0 ? color.new(TTBColors.colorDownPlus(), 90) : na) // Semi-transparent DownPlus color
+profit_color = strategy.openprofit < 0 ? TTBColors.colorDown() : TTBColors.colorUp() // Down color for loss, Up color for profit
+
+text_size = text_size_switch ? size.small : size.normal
+
+//Table formatting
+if show_table
+    var Table = table.new(position.bottom_right, columns=2, rows=20, border_width=1, bgcolor=color.new(#363a45, 0), border_color=color.gray)
+    table.cell(table_id=Table, column=0, row=0, text_color=color.gray, text_size=text_size, text='Net Profit')
+    table.cell(table_id=Table, column=1, row=0, text=str.tostring(int((capital - 100) * 100) / 100) + '%', text_size=text_size, text_color=TTBColors.colorUplight())
+    table.cell(table_id=Table, column=0, row=1, text_color=color.gray, text_size=text_size, text='Max Deviation ')
+    table.cell(table_id=Table, column=1, row=1, text=str.tostring(maxDev) + '%', text_size=text_size, text_color=TTBColors.colorDownlight())
+    table.cell(table_id=Table, column=0, row=2, text_color=color.gray, text_size=text_size, text='Max Short Dev ')
+    table.cell(table_id=Table, column=1, row=2, text=str.tostring(maxSDev) + '%', text_size=text_size, text_color=TTBColors.colorDownlight())
+    table.cell(table_id=Table, column=0, row=3, text='No SO ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=3, text=str.tostring(noSO), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=4, text='SO 1 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=4, text=str.tostring(SO1), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=5, text='SO 2 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=5, text=str.tostring(SO2), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=6, text='SO 3 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=6, text=str.tostring(SO3), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=7, text='SO 4 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=7, text=str.tostring(SO4), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=8, text='SO 5 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=8, text=str.tostring(SO5), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=9, text='SO 6 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=9, text=str.tostring(SO6), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=10, text='SO 7 ', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=10, text=str.tostring(SO7), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=11, text='Closed/Open trades', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=11, text=str.tostring(strategy.closedtrades) + '/' + str.tostring(strategy.opentrades), text_size=text_size, text_color=TTBColors.colorNeutral())
+    table.cell(table_id=Table, column=0, row=12, text='Current Deal Time', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=12, text=strategy.position_size != 0 ? str.tostring(int((time - firstBarTime) / 8640000) / 10) + ' days' : '0', text_size=text_size, text_color=color.green)
+    table.cell(table_id=Table, column=0, row=13, text='Unrealized position', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=13, text=str.tostring(int(strategy.openprofit / (strategy.initial_capital + strategy.netprofit) * 10000) / 100) + ' %', text_size=text_size, text_color=profit_color)
+    table.cell(table_id=Table, column=0, row=14, text='Longest deal:', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=14, text=str.tostring(int(maxDiffDays / 8640000) / 10) + ' days, ' + str.tostring(longest_trade_day) + '/' + str.tostring(longest_trade_month), text_size=text_size, text_color=TTBColors.colorDownlight())
+    table.cell(table_id=Table, column=0, row=15, text='Max price drop:', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=15, text=str.tostring(max_drop) + ' %, ' + str.tostring(drop_date) + '/' + str.tostring(drop_month), text_size=text_size, text_color=TTBColors.colorDownlight())
+    table.cell(table_id=Table, column=0, row=16, text='Max price pump:', text_size=text_size, text_color=color.gray)
+    table.cell(table_id=Table, column=1, row=16, text=str.tostring(max_pump) + ' %, ' + str.tostring(pump_date) + '/' + str.tostring(pump_month), text_size=text_size, text_color=TTBColors.colorDownlight())
+
+var tbb = TTBTableBuilder.new(position.bottom_left,6,2)
+if barstate.isconfirmed
+	header = tbb.R(0).TextColor(color.rgb(18, 247, 255)).TextSize(size.normal).Font(font.family_monospace)
+	header.Text("HTF1","HTF2","HTF3","ATRP","ATRP_HTF1","AVG ATR")
+    tbb.R(1).TextColor(color.white).TextSize(size.small).Text("A","B","C",str.tostring(atrp),str.tostring(atrp_htf1),str.tostring(avg_atr)).Bg(color.rgb(255, 255, 255, 74))
+	// tbb.R(2).TextColor(color.white).TextSize(size.small).Text("A","B","C")
+	// tbb.R(3).TextColor(color.white).

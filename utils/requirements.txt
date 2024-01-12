@@ -1,0 +1,10 @@
+lightweight-charts
+plotly
+vectorbtpro
+ipywidgets
+alpha_vantage
+matplotlib
+pandas_ta
+ta
+technical
+dill

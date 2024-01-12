@@ -1,0 +1,46 @@
+//@version=5
+indicator("TTB Price Range %", overlay = true, max_labels_count = 500)
+import thetradingbot/ttbcolors/1 as TTBColors
+
+// Define the lookback period and higher timeframe as user inputs
+lookbackPeriod = input(24, title="Lookback Period")
+higherTimeframe = input("M", title="Higher Timeframe")
+
+// Define a function to get the highest high, lowest low, and range percent
+getValues(sym, tf) =>
+    highestHigh = ta.highest(high, lookbackPeriod)
+    lowestLow = ta.lowest(low, lookbackPeriod)
+    Yrange = highestHigh - lowestLow
+    rangePercent = (Yrange / close) * 100
+    [highestHigh, lowestLow, rangePercent]
+
+// Use the security function to get the values from the higher timeframe
+[highestHigh, lowestLow, rangePercentWeekly] = request.security(syminfo.tickerid, higherTimeframe, getValues(syminfo.tickerid, higherTimeframe))
+
+// Calculate the price range and the size of each zone
+priceRange = highestHigh - lowestLow
+zoneSize = priceRange / 7
+
+// Create the zones and shade the background
+var line[] zoneLines = array.new_line(0)
+var linefill[] zoneFills = array.new_linefill(0)
+var line previousLine = na
+for i = 0 to 6
+    zoneLevel = lowestLow + i * zoneSize
+    currentLine = line.new(x1 = bar_index[lookbackPeriod], y1 = zoneLevel, x2 = bar_index, y2 = zoneLevel, color = color.gray, width = 1)
+    array.push(zoneLines, currentLine)
+    if na(previousLine) == false
+        zoneFill = linefill.new(currentLine, previousLine, color.new(color.gray, 90 - i * 10))
+        array.push(zoneFills, zoneFill)
+    previousLine := currentLine
+
+// Extend the lines to the left and right of the chart
+for i = 0 to array.size(zoneLines) - 1
+    line.set_x1(array.get(zoneLines, i), 0)
+    line.set_x2(array.get(zoneLines, i), bar_index)
+
+// Add the range percent text to the lines
+if (barstate.islast)
+    for i = 0 to 6
+        zoneLevel = lowestLow + i * zoneSize
+        label.new(x = bar_index, y = zoneLevel, text = "Zone " + str.tostring(i - 3), xloc = xloc.bar_index, yloc = yloc.price, color = color.gray, style = label.style_label_down, size = size.small)

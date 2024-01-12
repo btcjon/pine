@@ -1,0 +1,26 @@
+//@version=5
+indicator(title='TTB Basic Levels HigherTF', overlay=true)
+
+import thetradingbot/ttbcolors/1 as TTBColors
+
+offset_val = input(title='Label Offset', defval=20)
+showlabels = input(title='Show Labels', defval=true)
+
+RangeHigh = request.security(syminfo.tickerid, '6M', high)
+RangeLow = request.security(syminfo.tickerid, '6M', low)
+
+zones = (RangeHigh - RangeLow) / 5
+percentChange = ((RangeHigh - RangeLow) / RangeLow) * 100
+
+level20 = RangeLow + zones
+level50 = RangeLow + 2.5 * zones
+level80 = RangeHigh - zones
+
+above_level_20 = close > level20
+below_level_80 = close < level80
+
+plot(RangeLow, title='Low', style=plot.style_line, linewidth=2, color=TTBColors.colorUp(), show_last=1, trackprice=true, offset=offset_val)
+plot(RangeLow + zones, title='20%', style=plot.style_line, linewidth=2, color=TTBColors.colorUplight(), show_last=1, trackprice=true, offset=offset_val)
+plot(RangeLow + 2.5 * zones, title='50%', style=plot.style_line, linewidth=2, color=TTBColors.colorNeutral(), show_last=1, trackprice=true, offset=offset_val)
+plot(RangeLow + 4 * zones, title='80%', style=plot.style_line, linewidth=2, color=TTBColors.colorDownlight(), show_last=1, trackprice=true, offset=offset_val)
+plot(RangeHigh, title='High', style=plot.style_line, linewidth=2, color=TTBColors.colorDown(), show_last=1, trackprice=true, offset=offset_val)

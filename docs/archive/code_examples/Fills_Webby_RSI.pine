@@ -1,0 +1,64 @@
+//@version=5   
+
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © JohnMuchow
+
+// CODE REUSE: 
+// You can reuse this code as long as it is used in open-source indicators published 
+// only on TradingView and a link to this indicator is included.
+//
+// You CANNOT use this code if published, in full or part, in Protected or Invite-only TradingView indicators.
+
+indicator(title='Webby\'s RSI', overlay = false) 
+
+//---------------------------------------------------------
+// Inputs - User configurable values
+//----------------------------------------------------------
+iPlotStyle = input.string(title='Plot Style', defval='Histogram', options=['Histogram', 'Line', 'Area'], inline='PL', group='Plot')
+iPlotWidth = input.int(title='Width', defval=5, minval=1, maxval=8, inline='PL', group='Plot')
+iPlotColor = input.color(title='', defval=color.rgb(28, 71, 197), inline='PL', group='Plot')
+
+iZoneGradient = input.bool(title='Show Zones As Gradient', defval = true, inline='ZN', group='Zone Gradient')
+iGradientTop = input.color(title='', defval=color.rgb(177, 47, 47), inline='ZN', group='Zone Gradient')
+iGradientBottom = input.color(title='', defval=color.rgb(76, 175, 79, 0), inline='ZN', group='Zone Gradient')
+iHideZones = input.bool(title='Hide Zone Lines', defval = false, group='Zone Gradient')
+
+iMAVisible = input.bool(title='', defval=true, inline='MA', group='Moving Average')
+iMALength = input.int(title='', defval=10, minval=3, maxval=50, inline='MA', group='Moving Average')
+iMAType = input.string(title='', options=['SMA', 'EMA'], defval='SMA', inline='MA', group='Moving Average')
+iMAColor = input.color(title='', defval=#D2D4DB, inline='MA', group='Moving Average')
+iMAWidth = input.int(title='Width', defval=1, minval = 1, maxval = 3, inline='MA', group='Moving Average')
+
+//---------------------------------------------------------
+// Calculations
+//----------------------------------------------------------
+// 21-day EMA of close
+_21DayExpMovingAverage = ta.ema(close, 21)
+
+// Webby's RSI data point - percent of day's low vs 21-day EMA
+lowVs21DayMovingAverage = (low - _21DayExpMovingAverage) / close * 100
+
+// Simple moving average of data points 
+movingAverage = iMAType == 'SMA' ? ta.sma(lowVs21DayMovingAverage, iMALength) : ta.ema(lowVs21DayMovingAverage, iMALength)
+
+//----------------------------------------------------------
+// Zones and/or gradient
+//----------------------------------------------------------
+b1 = hline(0, title='0 line', color=color.rgb(120, 123, 134, 81), linestyle=hline.style_solid)
+x1 = hline(.5, color=iHideZones ? na : color.rgb(76, 175, 79, 0), linestyle=hline.style_solid)
+x2 = hline(2, color=iHideZones ? na : color.rgb(76, 175, 79, 0), linestyle=hline.style_solid)
+y1 = hline(4, color=iHideZones ? na : color.rgb(221, 205, 63), linestyle=hline.style_solid)
+z1 = hline(6, color=iHideZones ? na : color.rgb(201, 65, 95), linestyle=hline.style_solid)
+fill(z1, b1, top_value=6, bottom_value=0, top_color=iZoneGradient ? iGradientTop : na, bottom_color=iZoneGradient ? iGradientBottom : na) 
+
+//----------------------------------------------------------
+// Plot RSI
+//----------------------------------------------------------
+plot(series=lowVs21DayMovingAverage > 0 ? math.abs(lowVs21DayMovingAverage) : na, color=iPlotColor, 
+     linewidth=iPlotStyle == 'Histogram' or iPlotStyle == 'Line' ? iPlotWidth : na, 
+     style=iPlotStyle == 'Histogram' ? plot.style_histogram : iPlotStyle == 'Line' ? plot.style_line : plot.style_area, editable=false)
+
+//----------------------------------------------------------
+// Plot moving average
+//----------------------------------------------------------
+plot(iMAVisible and movingAverage >= 0 ? movingAverage : iMAVisible ? 0 : na, color=iMAColor, linewidth=iMAWidth, editable=false)

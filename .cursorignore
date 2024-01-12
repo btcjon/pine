@@ -1,0 +1,9 @@
+archive*
+*archive*
+.aider*
+docs/archive*
+data
+data/*
+utils/*
+
+

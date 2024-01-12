@@ -1,0 +1,131 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Mohit_Kakkar08
+// This code is written on the basis of Dow theory candlesticks rules by Mohit Kakkar. Disclaimer - Publisher is not responsible for any financial loss or any false signal.
+//@version=5
+indicator("TTB DOW Theory", overlay=true)
+
+show_plots = input(false, title='Show Plots?')
+show_SL_plots = input(true, title='Show SL Plots?')
+tableposition=input.string("top_right",title="Table position", options=["top_left", "top_center", "top_right", "middle_left", "middle_center", "middle_right", "bottom_left", "bottom_center", "bottom_right"])
+tabpos= tableposition== "top_left"? position.top_left:tableposition== "top_center"?position.top_center : tableposition== "top_right"? position.top_right : tableposition== "middle_left"? position.middle_left : tableposition== "middle_center"? position.middle_center : tableposition== "middle_right"? position.middle_right : tableposition== "bottom_left"? position.bottom_left : tableposition== "bottom_center"? position.bottom_center: tableposition== "bottom_right"? position.bottom_right: position.top_right
+
+
+oneSet = input.timeframe(defval='15', title='First Timeframe', group='Higher Timeframe Levels', 
+  tooltip='Allows you to set different time frames for timeframe continuity.')
+twoSet = input.timeframe(defval='60', title='Second Timeframe', group='Higher Timeframe Levels')
+threeSet = input.timeframe(defval='240', title='Third Timeframe', group='Higher Timeframe Levels')
+fourSet = input.timeframe(defval='D', title='Fourth Timeframe', group='Higher Timeframe Levels')
+fiveSet = input.timeframe(defval='W', title='Fifth Timeframe', group='Higher Timeframe Levels')
+
+f_Strat() =>
+    U = (high >= high[1]) and (low >= low[1]) and close>high[1]
+    D = (high <= high[1]) and (low <= low[1]) and close<low[1]
+    UX = U[1] and not D 
+    DX = D[1] and not U
+    UVX = (U[1] or UX[1]) and not U and not D
+    DVX = (D[1] or DX[1]) and not U and not D
+    OC = (high>high[1]) and (low<low[1])
+    UC= (U[1] or UX[1] or UVX[1] ) and close>low[1] and close>close[1] and not (D[1] or DX[1] or DVX[1] or OC[1])
+    DC= (D[1] or DX[1] or DVX[1] ) and close<high[1] and close<close[1] and not (U[1] or UX[1] or UVX[1] or OC[1])
+    UD = UC[1] and not D 
+    DD = DC[1] and not U
+    UE = close>low[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD) and ((U[1] or UX[1] or UVX[1] or UC[1] or UD[1]))
+    DE = close<high[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD or UE) 
+    [U, D, UX, DX, UVX, DVX, OC, UC, DC, UD, DD, UE, DE]
+
+
+[U0, D0, UX0, DX0, UVX0, DVX0, OC0, UC0, DC0, UD0, DD0, UE0, DE0 ] = request.security(syminfo.ticker, oneSet, f_Strat())
+[U1, D1, UX1, DX1, UVX1, DVX1, OC1, UC1, DC1, UD1, DD1, UE1, DE1] = request.security(syminfo.ticker, twoSet, f_Strat())
+[U2, D2, UX2, DX2, UVX2, DVX2, OC2, UC2, DC2, UD2, DD2, UE2, DE2] = request.security(syminfo.ticker, threeSet, f_Strat())
+[U3, D3, UX3, DX3, UVX3, DVX3, OC3, UC3, DC3, UD3, DD3, UE3, DE3] = request.security(syminfo.ticker, fourSet, f_Strat())
+[U4, D4, UX4, DX4, UVX4, DVX4, OC4, UC4, DC4, UD4, DD4, UE4, DE4] = request.security(syminfo.tickerid, fiveSet, f_Strat())
+
+// == TABLE PLOTTING ==
+var table trendTable = table.new(tabpos, 5, 2, border_width=2)
+upColor = color.rgb(38, 166, 154)
+downColor = color.rgb(240, 83, 80)
+tfColor = color.new(#999999, 0)
+show_table4 = input(true,  "Show MTF Price Action Table?")
+
+// Check to ensure boxes are all higher timeframe than the chart to remove glyph and gray out box if that's the case
+tfInMinutes(simple string tf = "") =>
+    float chartTf =
+      timeframe.multiplier * (
+      timeframe.isseconds ? 1. / 60             :
+      timeframe.isminutes ? 1.                  :
+      timeframe.isdaily   ? 60. * 24            :
+      timeframe.isweekly  ? 60. * 24 * 7        :
+      timeframe.ismonthly ? 60. * 24 * 30.4375  : na)
+    float result = tf == "" ? chartTf : request.security(syminfo.tickerid, tf, chartTf)
+    
+float chartTFInMinutes = tfInMinutes()
+bool TF1Check = tfInMinutes(oneSet) < chartTFInMinutes
+bool TF2Check = tfInMinutes(twoSet) < chartTFInMinutes
+bool TF3Check = tfInMinutes(threeSet) < chartTFInMinutes
+bool TF4Check = tfInMinutes(fourSet) < chartTFInMinutes
+bool TF5Check = tfInMinutes(fiveSet) < chartTFInMinutes
+
+
+// Define glyphs
+glyph1 = TF1Check ? na : (U0 or UX0 or UVX0 or UC0 or UD0 or UE0 ) ? '▲ ': (D0 or DX0 or DVX0 or DC0 or DD0 or DE0) ? '▼ ' : na
+glyph2 = TF2Check ? na : (U1 or UX1 or UVX1 or UC1 or UD1 or UE1) ? '▲ ': (D1 or DX1 or DVX1 or DC1 or DD1 or DE1) ? '▼ ' : na
+glyph3 = TF3Check ? na : (U2 or UX2 or UVX2 or UC2 or UD2 or UE2) ? '▲ ': (D2 or DX2 or DVX2 or DC2 or DD2 or DE2) ? '▼ ' : na
+glyph4 = TF4Check ? na : (U3 or UX3 or UVX3 or UC3 or UD3 or UE3) ? '▲ ': (D3 or DX3 or DVX3 or DC3 or DD3 or DE3) ? '▼ ' : na
+glyph5 = TF5Check ? na : (U4 or UX4 or UVX4 or UC4 or UD4 or UE4 ) ? '▲ ': (D4 or DX4 or DVX4 or DC4 or DD4 or DE4) ? '▼ ' : na
+
+f_fillCell(_column, _row, _cellText, _c_color) =>
+    table.cell(trendTable, _column, _row, _cellText, bgcolor=color.new(_c_color, 70), text_color=_c_color, width=3)
+
+
+if barstate.islast and show_table4
+    f_fillCell(0, 0, glyph1 + oneSet, TF1Check ? tfColor : (U0 or UX0 or UVX0 or UC0 or UD0 or UE0 ) ? upColor : downColor)
+    f_fillCell(1, 0, glyph2 + twoSet, TF2Check ? tfColor : (U1 or UX1 or UVX1 or UC1 or UD1 or UE1)  ? upColor : downColor)
+    f_fillCell(2, 0, glyph3 + threeSet, TF3Check ? tfColor : (U2 or UX2 or UVX2 or UC2 or UD2 or UE2) ? upColor : downColor)
+    f_fillCell(3, 0, glyph4 + fourSet, TF4Check ? tfColor : (U3 or UX3 or UVX3 or UC3 or UD3 or UE3) ? upColor : downColor)
+    f_fillCell(4, 0, glyph5 + fiveSet, TF5Check ? tfColor : (U4 or UX4 or UVX4 or UC4 or UD4 or UE4 ) ? upColor : downColor)
+  
+ 
+
+
+U = (high >= high[1]) and (low >= low[1]) and close>high[1]
+D = (high <= high[1]) and (low <= low[1]) and close<low[1]
+UX = U[1] and not D 
+DX = D[1] and not U
+UVX = (U[1] or UX[1]) and not U and not D
+DVX = (D[1] or DX[1]) and not U and not D
+OC = (high>high[1]) and (low<low[1])
+UC= (U[1] or UX[1] or UVX[1] ) and close>low[1] and close>close[1] and not (D[1] or DX[1] or DVX[1] or OC[1])
+DC= (D[1] or DX[1] or DVX[1] ) and close<high[1] and close<close[1] and not (U[1] or UX[1] or UVX[1] or OC[1])
+UD = UC[1] and not D 
+DD = DC[1] and not U
+
+UE = close>low[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD) and ((U[1] or UX[1] or UVX[1] or UC[1] or UD[1]))
+DE = close<high[1] and not (U or UX or UVX or UC or UD or D or DX or DVX or DC or DD or UE) 
+
+uptrend = (U or UX or UVX or UC or UD or UE)
+downtrend = (D or DX or DVX or DC or DD or DE)
+
+
+plotshape(show_plots ? UE : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_plots ? DE : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(show_plots ? UD : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_plots ? DD : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(show_plots ? U : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_plots ? D : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(show_plots ? UC : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_plots ? DC : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(show_plots ? UX : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_plots ? DX : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(show_plots ? UVX : na, style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(show_plots ? DVX : na, style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(show_plots ? OC : na, style=shape.diamond, location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny)
+
+length = input.int(3, title="Trailing SL", minval=2)
+lower = ta.lowest(length) -ta.atr(length)/5
+upper = ta.highest(length) +ta.atr(length)/5
+
+u = plot(show_SL_plots and downtrend ? upper : na, "Short SL", color=color.red, style = plot.style_linebr )
+l = plot(show_SL_plots and uptrend ? lower : na, "Long SL", color=color.green, style = plot.style_linebr )
+
+DowBuyFilter = U0 and U1 and U2 and U3 and U4
+DowSellFilter = D0 and D1 and D2 and D3 and D4

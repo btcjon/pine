@@ -1,0 +1,67 @@
+//@version=5
+indicator(title='TTB Stochastic Optimized Trend Tracker', shorttitle='TTB SOTT', format=format.price, precision=2, timeframe='')
+periodK = input.int(500, title='%K Length', minval=1)
+smoothK = input.int(200, title='%K Smoothing', minval=1)
+src1 = input(close, title='Source')
+length = input.int(2, 'OTT Period', minval=1)
+percent = input.float(0.5, 'OTT Percent', step=0.1, minval=0)
+showsupport = input(title='Show Support Line?', defval=false)
+showsignalsc = input(title='Show Stochastic/OTT Crossing Signals?', defval=false)
+Var_Func1(src1, length) =>
+    valpha1 = 2 / (length + 1)
+    vud11 = src1 > src1[1] ? src1 - src1[1] : 0
+    vdd11 = src1 < src1[1] ? src1[1] - src1 : 0
+    vUD1 = math.sum(vud11, 9)
+    vDD1 = math.sum(vdd11, 9)
+    vCMO1 = nz((vUD1 - vDD1) / (vUD1 + vDD1))
+    VAR1 = 0.0
+    VAR1 := nz(valpha1 * math.abs(vCMO1) * src1) + (1 - valpha1 * math.abs(vCMO1)) * nz(VAR1[1])
+    VAR1
+VAR1 = Var_Func1(src1, length)
+k = Var_Func1(ta.stoch(close, high, low, periodK), smoothK)
+src = k + 1000
+Var_Func(src, length) =>
+    valpha = 2 / (length + 1)
+    vud1 = src > src[1] ? src - src[1] : 0
+    vdd1 = src < src[1] ? src[1] - src : 0
+    vUD = math.sum(vud1, 9)
+    vDD = math.sum(vdd1, 9)
+    vCMO = nz((vUD - vDD) / (vUD + vDD))
+    VAR = 0.0
+    VAR := nz(valpha * math.abs(vCMO) * src) + (1 - valpha * math.abs(vCMO)) * nz(VAR[1])
+    VAR
+VAR = Var_Func(src, length)
+h0 = hline(1080, 'Upper Band', color=#606060)
+h1 = hline(1020, 'Lower Band', color=#606060)
+fill(h0, h1, color=color.new(#9915FF, 80), title='Background')
+plot(k + 1000, title='%K', color=color.new(#0094FF, 0))
+MAvg = Var_Func(src, length)
+fark = MAvg * percent * 0.01
+longStop = MAvg - fark
+longStopPrev = nz(longStop[1], longStop)
+longStop := MAvg > longStopPrev ? math.max(longStop, longStopPrev) : longStop
+shortStop = MAvg + fark
+shortStopPrev = nz(shortStop[1], shortStop)
+shortStop := MAvg < shortStopPrev ? math.min(shortStop, shortStopPrev) : shortStop
+dir = 1
+dir := nz(dir[1], dir)
+dir := dir == -1 and MAvg > shortStopPrev ? 1 : dir == 1 and MAvg < longStopPrev ? -1 : dir
+MT = dir == 1 ? longStop : shortStop
+OTT = MAvg > MT ? MT * (200 + percent) / 200 : MT * (200 - percent) / 200
+plot(showsupport ? MAvg : na, color=color.new(#0585E1, 0), linewidth=2, title='Support Line')
+OTTC = #B800D9
+pALL = plot(nz(OTT[2]), color=color.new(OTTC, 0), linewidth=2, title='OTT')
+alertcondition(ta.cross(src, OTT[2]), title='Price Cross Alert', message='OTT - Price Crossing!')
+alertcondition(ta.crossover(src, OTT[2]), title='Price Crossover Alarm', message='PRICE OVER OTT - BUY SIGNAL!')
+alertcondition(ta.crossunder(src, OTT[2]), title='Price Crossunder Alarm', message='PRICE UNDER OTT - SELL SIGNAL!')
+buySignalc = ta.crossover(src, OTT[2])
+plotshape(buySignalc and showsignalsc ? OTT * 0.995 : na, title='Buy', text='Buy', location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.green, 0), textcolor=color.new(color.white, 0))
+sellSignallc = ta.crossunder(src, OTT[2])
+plotshape(sellSignallc and showsignalsc ? OTT * 1.005 : na, title='Sell', text='Sell', location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), textcolor=color.new(color.white, 0))
+
+
+
+
+
+
+

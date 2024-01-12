@@ -1,0 +1,1116 @@
+//@thetradingbot
+//@version=5
+indicator(title='TTB_Signals', overlay=true, shorttitle='TTB_Signals', max_bars_back = 4900)
+
+import thetradingbot/TTB_TableBuilder/1 as TTBTableBuilder
+
+//main colors
+color bullish = #00a2ff
+color bullish2 = #00a2ff7a
+color bullish3 = #00a2ff1f
+color bearish = #C70A80ff
+color bearish2 = color.rgb(199, 10, 126, 54)
+color bearish3 = color.rgb(199, 10, 126, 88)
+
+// f_security function for MTF
+f_security(_sym, _res, _src, _rep) =>
+    request.security(_sym, _res, _src[not _rep and barstate.isrealtime ? 1 : 0])[_rep or barstate.isrealtime ? 0 : 1]
+var bool i_repaint = false // Set to false to avoid repainting
+var string ticker = syminfo.tickerid
+
+HTF1 = input.int(30, title='HTF1')
+HTF_Factor = input.int(2, title='ATRP Length', minval=1)
+HTF2 = HTF1 * HTF_Factor
+HTF3 = HTF1 * HTF_Factor
+
+// Convert integer timeframes to string
+HTF1_str = str.tostring(HTF1)
+HTF2_str = str.tostring(HTF2)
+HTF3_str = str.tostring(HTF3)
+
+
+// vars
+var float signal = na
+var float SO_filter = na
+var float SO_triggers = na
+var float the_trend = na
+
+
+// ATRP
+atrp_length = input.int(75, title='ATRP Length', minval=1)
+
+// Declare variables
+var trp = float(0)
+var atrp = float(0)
+
+// Calculate true range percent
+trp := ta.tr / hl2 * 100
+
+round_to(n, decimals) =>
+    mult = 1.0
+    for i = 1 to decimals
+        mult := mult * 10
+    round_n = na(n * mult + 0.5) ? na : (n * mult + 0.5) - (n * mult + 0.5) % 1
+    round_n / mult
+
+// Calculate smoothed percentage range
+atrp := ta.sma(trp, atrp_length)
+
+//atrp_htf1 = f_security(ticker, HTF1, atrp, i_repaint)
+atrp_htf1 = round_to(f_security(ticker, HTF1_str, atrp, i_repaint), 4)
+atrp_htf2 = round_to(f_security(ticker, HTF2_str, atrp, i_repaint), 4)
+atrp_htf3 = round_to(f_security(ticker, HTF3_str, atrp, i_repaint), 4)
+//end atrp
+
+
+
+// atr
+atr_length = 100
+ma_function(_source, _length) => ta.rma(_source, _length)
+avg_atr = ma_function(ta.tr, atr_length)
+ATR = ta.atr(100)
+//end atr
+
+
+
+// half trend
+ht_groupTitleHalfTrend = "Half Trend"
+ht_amplitude = input(title='Amplitude', defval=5, group = ht_groupTitleHalfTrend)
+ht_channelDeviation = input(title='Channel Deviation', defval=10, group = ht_groupTitleHalfTrend)
+ht_showArrows = input(title='Show Arrows', defval=false, group = ht_groupTitleHalfTrend)
+ht_showChannels = input(title='Show Channels', defval=false, group = ht_groupTitleHalfTrend)
+
+var int ht_trend = 0
+var int ht_nextTrend = 0
+var float ht_maxLowPrice = nz(low[1], low)
+var float ht_minHighPrice = nz(high[1], high)
+
+var float ht_up = 0.0
+var float ht_down = 0.0
+float ht_atrHigh = 0.0
+float ht_atrLow = 0.0
+float ht_arrowUp = na
+float ht_arrowDown = na
+
+ht_atr2 = ta.atr(100) / 2
+ht_dev = ht_channelDeviation * ht_atr2
+
+ht_highPrice = high[math.abs(ta.highestbars(ht_amplitude))]
+ht_lowPrice = low[math.abs(ta.lowestbars(ht_amplitude))]
+ht_highma = ta.sma(high, ht_amplitude)
+ht_lowma = ta.sma(low, ht_amplitude)
+
+if ht_nextTrend == 1
+    ht_maxLowPrice := math.max(ht_lowPrice, ht_maxLowPrice)
+
+    if ht_highma < ht_maxLowPrice and close < nz(low[1], low)
+        ht_trend := 1
+        ht_nextTrend := 0
+        ht_minHighPrice := ht_highPrice
+        ht_minHighPrice
+else
+    ht_minHighPrice := math.min(ht_highPrice, ht_minHighPrice)
+
+    if ht_lowma > ht_minHighPrice and close > nz(high[1], high)
+        ht_trend := 0
+        ht_nextTrend := 1
+        ht_maxLowPrice := ht_lowPrice
+        ht_maxLowPrice
+
+if ht_trend == 0
+    if not na(ht_trend[1]) and ht_trend[1] != 0
+        ht_up := na(ht_down[1]) ? ht_down : ht_down[1]
+        ht_arrowUp := ht_up - ht_atr2
+        ht_arrowUp
+    else
+        ht_up := na(ht_up[1]) ? ht_maxLowPrice : math.max(ht_maxLowPrice, ht_up[1])
+        ht_up
+    ht_atrHigh := ht_up + ht_dev
+    ht_atrLow := ht_up - ht_dev
+    ht_atrLow
+else
+    if not na(ht_trend[1]) and ht_trend[1] != 1
+        ht_down := na(ht_up[1]) ? ht_up : ht_up[1]
+        ht_arrowDown := ht_down + ht_atr2
+        ht_arrowDown
+    else
+        ht_down := na(ht_down[1]) ? ht_minHighPrice : math.min(ht_minHighPrice, ht_down[1])
+        ht_down
+    ht_atrHigh := ht_down + ht_dev
+    ht_atrLow := ht_down - ht_dev
+    ht_atrLow
+
+ht = ht_trend == 0 ? ht_up : ht_down
+
+var color ht_buyColor = bullish
+var color ht_sellColor = bearish
+
+ht_htColor = ht_trend == 0 ? ht_buyColor : ht_sellColor
+
+
+ht_buySignal = not na(ht_arrowUp) and ht_trend == 0 and ht_trend[1] == 1
+ht_sellSignal = not na(ht_arrowDown) and ht_trend == 1 and ht_trend[1] == 0
+
+// end half trend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+///Reversal Signals
+
+//------------------------------------------------------------------------------
+// Settings
+//-----------------------------------------------------------------------------{
+
+bGR  = 'Momentum Phase'
+bTP  = 'Momentum phase provides an indication of the initial trend\'s momentum and identifies a point of a likely top or bottom in the ranging markets\n\n' +
+         'Completed - dislays only completed momentum phases\n' +
+         'Detailed - displays all counting process of the momentum phases\nNone - disables the display of the momentum phases'
+
+bSh  = 'Completed'
+srL  = false
+ptLT = 'Step Line w/ Diamonds'
+rsB  = false
+
+ptSR = 'Circles'
+
+eGR  = 'Trend Exhaustion Phase'
+eTP  = 'Trend exhaustion phase aims to identify when the trend is fading/exhausting and possibly starting to reverse. The trend exhaustion phase starts only if a momentum phase is already established\n\n' +
+         'Completed - dislays only completed trend exhaustion phases\n' +
+         'Detailed - displays all counting process of the trend exhaustion phases\nNone - disables the display of the trend exhaustion phases'
+eSh  = 'Completed'
+rsE  = false
+ttE  = false
+
+tGR = 'Trade Setups'
+
+tTP = 'All phase specific trade setups, presented as options, are triggered once the selected phase is completed and folowed by a price flip in the direction of the trade setup. Please pay attention to the phase specific risk levels as well as the overall trend direction\n' +
+       '⚠️ Trading is subject to high risk, look first then leap\n\n' +
+       'Tips : \n' +
+       ' - Momentum trade setups are not recommended setups, and in case applied they best fit in ranging market\n' +
+       '    a trade signal, followed immediately by a warning indication can be assumed as continuation of the underlying trend and can be traded in the opposite direction of the suggested signal\n\n' +
+       ' -  Exhaustion / Qualified trade setups best fits in trending market\n' +
+       '    Exhaustion, suggested type of trade setup, buy (sell) when buy (sell) trend exhaustion phase is complete\n' +
+       '    Qualified, trend exhaustion phase followed by momentum phase is assumed as qualified trade setup'
+
+tso = 'Exhaustion'
+war = false
+
+//-----------------------------------------------------------------------------}
+// General Calculations
+//-----------------------------------------------------------------------------{
+
+var BnoShw = false
+Bcmpltd    = bSh == 'Completed' 
+BnoShw    := bSh == 'None' ? false : true
+
+var noShw = false
+cmpltd    = eSh == 'Completed' 
+noShw    := eSh == 'None' ? false : true
+
+//-----------------------------------------------------------------------------}
+// User Defined Types
+//-----------------------------------------------------------------------------{
+
+// @type        bar properties with their values 
+//
+// @field o     (float) open price of the bar
+// @field h     (float) high price of the bar
+// @field l     (float) low price of the bar
+// @field c     (float) close price of the bar
+// @field i     (int) index of the bar
+
+type bar
+    float o = open
+    float h = high
+    float l = low
+    float c = close
+    int   i = bar_index
+
+// @type        momentum phase varaibles
+//
+// @field bSC   (int) bullish momentum phase count
+// @field bSH   (float) bullish momentum phase high price value
+// @field bSL   (float) bullish momentum phase lowest price value
+//
+// @field sSC   (int) bearish momentum phase count
+// @field sSH   (float) bearish momentum phase highest price value
+// @field sSL   (float) bearish momentum phase low price value
+
+type trb 
+    int   bSC
+    float bSH
+    float bSL
+
+    int   sSC
+    float sSH
+    float sSL
+
+// @type        trend exhaustion phase varaibles
+//
+// @field bCC   (int) bullish trend exhaustion phase count
+// @field bC8   (float) bullish trend exhaustion phase 8 count's condition
+// @field bCHt  (float) bullish trend exhaustion phase highest price value
+// @field bCH   (float) bullish trend exhaustion phase high price value
+// @field bCL   (float) bullish trend exhaustion phase low price value
+// @field bCLt  (float) bullish trend exhaustion phase lowest price value
+// @field bCD   (float) bullish trend exhaustion phase risk price value
+//
+// @field sCC   (int) bearish trend exhaustion phase count
+// @field sC8   (float) bearish trend exhaustion phase 8 count's condition
+// @field sCHt  (float) bearish trend exhaustion phase highest price value
+// @field sCH   (float) bearish trend exhaustion phase high price value
+// @field sCL   (float) bearish trend exhaustion phase low price value
+// @field sCLt  (float) bearish trend exhaustion phase lowest price value
+// @field sCT   (float) bearish trend exhaustion phase target price value
+
+type tre 
+    int   bCC
+    float bC8
+    float bCHt
+    float bCH
+    float bCL
+    float bCLt
+    float bCD
+
+    int   sCC
+    float sC8
+    float sCHt
+    float sCH
+    float sCL
+    float sCLt
+    float sCT
+
+//-----------------------------------------------------------------------------}
+// Variables
+//-----------------------------------------------------------------------------{
+
+bar b = bar.new()
+var trb S = trb.new()
+var tre C = tre.new()
+
+noC  = #00000000
+rdC  = #f23645
+gnC  = #089981
+whC  = #ffffff
+blC  = #2962ff
+grC  = #787b86
+bgC  = #00bcd4
+
+shpD = shape.labeldown
+shpU = shape.labelup
+locA = location.abovebar
+locB = location.belowbar
+dspN = false
+pltL = plot.style_circles
+pltS = size.tiny
+
+//-----------------------------------------------------------------------------}
+// Functions / Methods
+//-----------------------------------------------------------------------------{
+
+// @function     alert function detecting crosses
+//
+// @param _p     (float) price value 
+// @param _l     (float) checked level value
+//
+// return        (bool) true if condition mets, false otherwise 
+
+f_xLX(_p, _l) =>
+    (_l > _p and _l < _p[1]) or (_l < _p and _l > _p[1])
+
+
+// @function     plot style function
+//
+// @param _p     (string) input string value 
+//
+// return        returns enumarated plot style value
+
+f_lnS(_s) =>
+    s = switch _s
+        'Circles'               => plot.style_circles
+        'Step Line'             => plot.style_steplinebr
+        'Step Line w/ Diamonds' => plot.style_steplinebr
+
+//-----------------------------------------------------------------------------}
+// Calculations
+//-----------------------------------------------------------------------------{
+
+ptLB = f_lnS(ptLT)
+ptRS = f_lnS(ptSR)
+
+//-----------------------------------------------------------------------------}
+// Momentum Phase
+//-----------------------------------------------------------------------------{
+
+con = b.c < b.c[4]
+
+if con
+    S.bSC := S.bSC == 9 ? 1 : S.bSC + 1
+    S.sSC := 0
+else
+    S.sSC := S.sSC == 9 ? 1 : S.sSC + 1
+    S.bSC := 0
+
+pbS = (b.l <= b.l[3] and b.l <= b.l[2]) or (b.l[1] <= b.l[3] and b.l[1] <= b.l[2])
+
+bC8  = S.bSC[1] == 8 and S.sSC == 1
+
+sR   = ta.highest(9)
+bSR  = 0.0
+bSR := S.bSC == 9 or bC8 ? sR : b.c > bSR[1] ? 0 : bSR[1]
+
+if S.bSC == 1
+    S.bSL := b.l
+
+if S.bSC > 0
+    S.bSL := math.min(b.l, S.bSL)
+
+    if b.l == S.bSL
+        S.bSH := b.h
+
+bSD  = 0.0
+bSD := S.bSC == 9 ? 2 * S.bSL - S.bSH : b.c < bSD[1] or S.sSC == 9 ? 0 : bSD[1]
+
+
+psS = (b.h >= b.h[3] and b.h >= b.h[2]) or (b.h[1] >= b.h[3] and b.h[1] >= b.h[2])
+
+sC8  = S.sSC[1] == 8 and S.bSC == 1
+
+sS   = ta.lowest(9)
+sSS  = 0.0
+sSS := S.sSC == 9 or sC8 ? sS : b.c < sSS[1] ? 0 : sSS[1]
+
+if S.sSC == 1
+    S.sSH := b.h
+
+if S.sSC > 0
+    S.sSH := math.max(b.h, S.sSH)
+
+    if b.h == S.sSH
+        S.sSL := b.l
+
+sSD  = 0.0
+sSD := S.sSC == 9 ? 2 * S.sSH - S.sSL : b.c > sSD[1] or S.bSC == 9 ? 0 : sSD[1]
+
+//-----------------------------------------------------------------------------}
+// Trend Exhaustion Phase
+//-----------------------------------------------------------------------------{
+
+bCC = b.c <= b.l[2]
+b13 = b.c <= b.l[2] and b.l >= C.bC8
+
+var sbC = false
+sbC := if S.bSC == 9 and C.bCC == 0 and (pbS or pbS[1])
+    true
+else
+    if S.sSC == 9 or C.bCC == 13 or b.c > bSR
+        false
+    else
+        sbC[1]
+
+C.bCC := sbC ? S.bSC == 9 ? bCC ? 1 : 0 : bCC ? C.bCC + 1 : C.bCC : 0
+C.bCC := C.bCC == 13 and b13 ? C.bCC - 1 : C.bCC
+
+if C.bCC == 8 and C.bCC != C.bCC[1]
+    C.bC8 := b.c
+
+shwBC = noShw and not cmpltd and sbC and C.bCC != C.bCC[1]
+
+if C.bCC == 1
+    C.bCLt := b.l
+    C.bCHt := b.h
+    
+if sbC
+    C.bCHt := math.max(b.h, C.bCHt)
+    C.bCLt := math.min(b.l, C.bCLt)
+    
+    if b.h == C.bCHt
+        C.bCL := b.l
+
+    if b.l == C.bCLt
+        C.bCH := b.h
+
+bCT = 2 * C.bCHt - C.bCL
+bCT := C.bCC == 13 ? bCT : b.c > bCT[1] or (C.bCD == 0 and C.sCC == 13) ? 0. : bCT[1]
+
+bCD = 2 * C.bCLt - C.bCH
+bCD := C.bCC == 13 ? bCD : b.c < bCD[1] or (bCT == 0 and C.sCC == 13) ? 0. : bCD[1]
+C.bCD := bCD
+
+sCC = b.c >= b.h[2]
+s13 = b.c >= b.h[2] and b.h <= C.sC8
+
+var ssC = false
+ssC := if S.sSC == 9 and C.sCC == 0 and (psS or psS[1])
+    true
+else
+    if S.bSC == 9 or C.sCC == 13 or b.c < sSS
+        false
+    else
+        ssC[1]
+
+C.sCC := ssC ? S.sSC == 9 ? sCC ? 1 : 0 : sCC ? C.sCC + 1 : C.sCC : 0
+C.sCC := C.sCC == 13 and s13 ? C.sCC - 1 : C.sCC
+
+if C.sCC == 8 and C.sCC != C.sCC[1]
+    C.sC8 := b.c
+
+shwSC = noShw and not cmpltd and ssC and C.sCC != C.sCC[1]
+
+if C.sCC == 1
+    C.sCLt := b.l
+    C.sCHt := b.h
+
+if ssC
+    C.sCHt := math.max(b.h, C.sCHt)
+    C.sCLt := math.min(b.l, C.sCLt)
+    
+    if b.h == C.sCHt
+        C.sCL := b.l
+
+    if b.l == C.sCLt
+        C.sCH := b.h
+
+sCD = 2 * C.sCHt - C.sCL
+sCD := C.sCC == 13 ? 2 * C.sCHt - C.sCL : b.c > sCD[1] or (C.sCT == 0 and C.bCC == 13) ? 0. : sCD[1]
+
+sCT = 2 * C.sCLt - C.sCH
+sCT := C.sCC == 13 ? sCT : b.c < sCT[1] or (sCD == 0 and C.bCC == 13) ? 0. : sCT[1]
+C.sCT := sCT
+
+//-----------------------------------------------------------------------------}
+// Trade Setups
+//-----------------------------------------------------------------------------{
+
+
+var sbPF = false, var bPFc = false
+var ssPF = false, var sPFc = false
+
+var lTrd = false, var sTrd = false
+
+bBl9 = ta.valuewhen(S.bSC == 9 , b.i, 0)
+bBp9 = ta.valuewhen(S.bSC == 9 , b.i, 1)
+bB13 = ta.valuewhen(C.bCC == 13, b.i, 0)
+
+sBl9 = ta.valuewhen(S.sSC == 9 , b.i, 0)
+sBp9 = ta.valuewhen(S.sSC == 9 , b.i, 1)
+sB13 = ta.valuewhen(C.sCC == 13, b.i, 0)
+
+trdS = tso != 'None'
+
+sQC  = (sBl9 > sB13) and (sB13 > sBp9) and (sBp9 > bBl9)
+sPFO = tso == 'Momentum' ? S.sSC == 9 or sC8 : tso == 'Exhaustion' ? C.sCC[5] == 13 : S.sSC == 9 and sQC
+ 
+ssPF := if sPFO
+    true
+else
+    if sPFc
+        false
+    else
+        ssPF[1]
+
+sPFc := ssPF and b.c < b.c[4] and b.c[1] > b.c[5]
+
+[sTR, sST] = if tso == 'Exhaustion'
+    if sCD == 0
+        [' - Risky', str.tostring(b.h, format.mintick)]
+    else
+        ['', str.tostring(sCD, format.mintick)]
+else
+    if sSD == 0
+        [' - Risky', str.tostring(b.h, format.mintick)]
+    else
+        ['', str.tostring(sSD, format.mintick)] 
+
+sTT = 'Short Trade Setup' + sTR + '\n Signal : Completed ' + tso + ' plus Bearish Price Flip\n' +
+              ' Stop    : '  + sST +
+              '\n Target : ' + str.tostring(tso == 'Exhaustion' ? sCT    : sSS, format.mintick)
+
+if sPFc and trdS
+    //label.new(bar_index, b.h, 'S',  xloc.bar_index, yloc.price, color.new(color.yellow, 25), label.style_label_down, color.white, size.small, text.align_center, sTT + '\n\nnot a finacial advice, subject to high risk')
+    alert(syminfo.ticker + ' : ' + sTT + '\n Price    : ' + str.tostring(close, format.mintick) + '\n\nnot a finacial advice, subject to high risk')
+    sTrd := true
+    lTrd := false
+
+if war and sTrd and b.o < b.c and S.sSC == 2 and not lTrd
+    //label.new(bar_index, b.l, '⚠️',  xloc.bar_index, yloc.price, color.new(color.yellow, 100), label.style_label_up, color.yellow, size.large, text.align_center, 'Warning\nbullish price flip detected')
+    sTrd := false
+
+if war and sTrd and b.o < b.c and ((sSD[1] != 0 and b.c > sSD[1]) or (sCD[1] != 0 and b.c > sCD[1]))
+    //label.new(bar_index, b.l, '⚠️',  xloc.bar_index, yloc.price, color.new(color.yellow, 100), label.style_label_up, color.yellow, size.large, text.align_center, 'Critical Warning\nstop/risk level breached')
+    sTrd := false
+
+bQC  = (bBl9 > bB13) and (bB13 > bBp9) and (bBp9 > sBl9)
+bPFO = tso == 'Momentum' ? S.bSC == 9 or bC8 : tso == 'Exhaustion' ? C.bCC[5] == 13 : S.bSC == 9 and bQC 
+
+sbPF := if bPFO
+    true
+else
+    if bPFc
+        false
+    else
+        sbPF[1]
+
+bPFc := sbPF and b.c > b.c[4] and b.c[1] < b.c[5]
+
+[bTR, bST] = if tso == 'Exhaustion'
+    if bCD == 0
+        [' - Risky', str.tostring(b.l, format.mintick)]
+    else
+        ['', str.tostring(bCD, format.mintick)]
+else
+    if bSD == 0
+        [' - Risky', str.tostring(b.l, format.mintick)]
+    else
+        ['', str.tostring(bSD, format.mintick)] 
+
+lTT = 'Long Trade Setup' + bTR + '\n Signal : Completed ' + tso + ' plus Bullish Price Flip\n' +
+              ' Stop    : '  + bST +
+              '\n Target : ' + str.tostring(tso == 'Exhaustion' ? bCT : bSR, format.mintick)
+
+if bPFc and trdS
+    //label.new(bar_index, b.l, 'L',  xloc.bar_index, yloc.price, color.new(color.blue, 25), label.style_label_up, color.white, size.small, text.align_center, lTT + '\n\nnot a finacial advice, subject to high risk')
+    alert(syminfo.ticker + ' : ' + lTT + '\n Price    : ' + str.tostring(close, format.mintick) + '\n\nnot a finacial advice, subject to high risk')
+    lTrd := true
+    sTrd := false
+
+if war and lTrd and b.o > b.c and S.bSC == 2 and not sTrd
+    //label.new(bar_index, b.h, '⚠️',  xloc.bar_index, yloc.price, color.new(color.blue, 100), label.style_label_down, color.yellow, size.large, text.align_center, 'Warning\nbearish price flip detected')
+    lTrd := false
+
+if war and lTrd and b.o > b.c and (b.c < bSD[1] or b.c < bCD[1])
+    //label.new(bar_index, b.h, '⚠️',  xloc.bar_index, yloc.price, color.new(color.blue, 100), label.style_label_down, color.yellow, size.large, text.align_center, 'Critical Warning\nstop/risk level breached')
+    lTrd := false
+
+
+//-----------------------------------------------------------------------------}
+// Alerts
+//-----------------------------------------------------------------------------{
+
+pTxt = str.tostring(b.c, format.mintick)
+tTxt = syminfo.ticker
+
+if f_xLX(b.c, bSR) and srL
+    alert(tTxt + ' crossing resistance level detected, price ' + str.tostring(bSR, format.mintick))
+
+if f_xLX(b.c, bSD) or f_xLX(b.c, sSD) and rsB
+    alert(tTxt + ' crossing momentum risk level detected, price ' + str.tostring(bSD, format.mintick))
+
+if f_xLX(b.c, sSS) and srL
+    alert(tTxt + ' crossing support level detected, price ' + str.tostring(sSS, format.mintick))
+
+if f_xLX(b.c, bCD) or f_xLX(b.c, sCD) and rsE
+    alert(tTxt + ' crossing trend exhaustion risk level detected, price ' + str.tostring(bCD, format.mintick))
+
+if S.bSC == 9 and cmpltd
+    alert(tTxt + ' bullish momentum phase completion detected, price ' + pTxt)
+
+if S.sSC == 9 and cmpltd
+    alert(tTxt + ' bearish momentum phase completion detected, price ' + pTxt)
+
+if C.bCC == 13 and cmpltd
+    alert(tTxt + ' bullish trend exhaustion phase completion detected, price ' + pTxt)
+
+if C.sCC == 13 and cmpltd
+    alert(tTxt + ' bearish trend exhaustion phase completion detected, price ' + pTxt)
+
+if bSR > 0 and bSR[1] == 0
+    alert(tTxt + ' bearish momentum detected, price ' + pTxt)
+
+if sSS > 0 and sSS[1] == 0
+    alert(tTxt + ' bullish momentum detected, price ' + pTxt)
+
+exLongTrigger = bPFc and trdS
+exShortTrigger = sPFc and trdS
+// END //Reversal Signals
+
+
+
+//Nadaraya-Watson non repainting
+src = close
+h = input.float(8., 'Lookback Window', minval=3., tooltip='The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars. Recommended range: 3-50')
+r = input.float(8., 'Relative Weighting', step=0.25, tooltip='Relative weighting of time frames. As this value approaches zero, the longer time frames will exert more influence on the estimation. As this value approaches infinity, the behavior of the Rational Quadratic Kernel will become identical to the Gaussian kernel. Recommended range: 0.25-25')
+x_0 = input.int(25, "Start Regression at Bar", tooltip='Bar index on which to start regression. The first bars of a chart are often highly volatile, and omission of these initial bars often leads to a better overall fit. Recommended range: 5-25')
+showMiddle = input(false, "Show middle band")
+smoothColors = input.bool(false, "Smooth Colors", tooltip="Uses a crossover based mechanism to determine colors. This often results in less color transitions overall.", inline='1', group='Colors')
+lag = input.int(2, "Lag", tooltip="Lag for crossover detection. Lower values result in earlier crossovers. Recommended range: 1-2", inline='1', group='Colors')
+showNWplots = input(false, "Show NW Plots")
+showNWSignals = input(false, "Show NW Signals")
+
+lenjeje = input(32, "ATR Period", tooltip= 'Period to calculate upper and lower band', group='Bands')
+coef = input(2.7,"Multiplier",tooltip= 'Multiplier to calculate upper and lower band', group='Bands')
+float y1 = 0.
+float y2 = 0.
+srcArray = array.new<float>(0)
+array.push(srcArray, src)
+size = array.size(srcArray)
+
+
+kernel_regression1(_src, _size, _h) =>
+    float _currentWeight = 0.
+    float _cumulativeWeight = 0.
+    for i = 0 to _size + x_0
+        y = _src[i] 
+        w = math.pow(1 + (math.pow(i, 2) / ((math.pow(_h, 2) * 2 * r))), -r)
+        _currentWeight += y*w
+        _cumulativeWeight += w
+    [_currentWeight, _cumulativeWeight]
+
+[currentWeight1, cumulativeWeight1] = kernel_regression1(src, size, h)
+yhat1 = currentWeight1 / cumulativeWeight1
+[currentWeight2, cumulativeWeight2] = kernel_regression1(src, size, h-lag)
+yhat2 = currentWeight2 / cumulativeWeight2
+
+// Rates of Change
+bool wasBearish = yhat1[2] > yhat1[1]
+bool wasBullish = yhat1[2] < yhat1[1]
+bool isBearish = yhat1[1] > yhat1
+bool isBullish = yhat1[1] < yhat1
+bool isBearishChange = isBearish and wasBullish
+bool isBullishChange = isBullish and wasBearish
+
+// Crossovers
+bool isBullishCross = ta.crossover(yhat2, yhat1)
+bool isBearishCross = ta.crossunder(yhat2, yhat1) 
+bool isBullishSmooth = yhat2 > yhat1
+bool isBearishSmooth = yhat2 < yhat1
+
+// Colors
+color colorByCross = isBullishSmooth ? bullish : bearish
+color colorByRate = isBullish ? bullish : bearish
+color plotColor = smoothColors ? colorByCross : colorByRate
+
+
+upperjeje = yhat1 + coef*ta.atr(lenjeje)
+lowerjeje = yhat1 - coef*ta.atr(lenjeje)
+//upperje = plot(showNWplots ? upperjeje : na, "Rational Quadratic Kernel Upper", color=bullish, linewidth=1)
+//lowerje = plot(showNWplots ? lowerjeje : na, "Rational Quadratic Kernel Lower", color=bearish, linewidth=1)
+
+NW_short = ta.crossover(close, upperjeje)
+NW_long = ta.crossunder(close, lowerjeje)
+//  END Nadaraya-Watson non repainting
+
+
+
+// Structure
+groupTitleStructureSettings = "Structure Settings"
+MSlength  = input(5, 'Pivot Lookback', group = groupTitleStructureSettings)
+incr    = input.float(95, 'Increment Factor %', minval = 0, group = groupTitleStructureSettings)
+showTS  = input(false, "Show TS", group = groupTitleStructureSettings)
+showTrendChange = input.bool(false, "Show Trend Change", group = groupTitleStructureSettings)
+show_ts_htf1 = input.bool(false, title="Show HTF1 Trailing Stop", group = groupTitleStructureSettings)
+show_ts_htf2 = input.bool(false, title="Show HTF2 Trailing Stop", group = groupTitleStructureSettings)
+show_ts_htf3 = input.bool(false, title="Show HTF3 Trailing Stop", group = groupTitleStructureSettings)
+
+resetOn = 'CHoCH'
+
+//Style 
+bullCss    = bullish2
+bearCss    = bearish2
+retCss     = #413002
+areaTransp = 90
+
+bullCss2    = bullish2
+bearCss2    = bearish2
+retCss2    = #413002
+areaTransp2 = 90
+
+//structure Global variables
+var float ph_y = na , var int ph_x = na
+var float pl_y = na , var int pl_x = na
+var float top = na  , var float btm = na
+var ph_cross = false, var pl_cross = false
+
+var float max = na
+var float min = na
+var float ts = na
+
+var os = 0
+ms = 0
+
+//Detect pivots and get coordinates
+n = bar_index
+ph = ta.pivothigh(MSlength, MSlength)
+pl = ta.pivotlow(MSlength, MSlength)
+
+if ph > 0
+    ph_y := ph
+    ph_x := n - MSlength
+    ph_cross := false
+
+if pl > 0
+    pl_y := pl
+    pl_x := n - MSlength
+    pl_cross := false
+
+//Bullish structures
+if close > ph_y and not ph_cross
+    if resetOn == 'CHoCH'
+        ms := os == -1 ? 1 : 0
+    else
+        ms := 1
+
+    ph_cross := true
+
+
+    os := 1
+
+    //Search for local minima
+    btm := low
+    for i = 0 to (n - ph_x)-1
+        btm := math.min(low[i], btm)
+
+    osChange = os != os[1]
+
+//Bearish structures
+if close < pl_y and not pl_cross
+    if resetOn == 'CHoCH'
+        ms := os == 1 ? -1 : 0
+    else
+        ms := -1
+
+    pl_cross := true
+
+    os := -1
+
+    //Search for local maxima
+    top := high
+    for i = 0 to (n - pl_x)-1
+        top := math.max(high[i], top)
+
+    osChange = os != os[1]
+
+//Trailing stop max/min
+if ms == 1
+    max := close
+else if ms == -1
+    min := close
+else
+    max := math.max(close, max)
+    min := math.min(close, min)
+
+//Trailing stop
+ts := ms == 1 ? btm
+  : ms == -1 ? top
+  : os == 1 ? ts + (max - max[1]) * incr / 100
+  : ts + (min - min[1]) * incr / 100
+
+css = (ms > 0) ? na 
+  : os == 1 ? bullCss
+  : bearCss
+
+css2 = (ms > 0) ? na 
+  : os == 1 ? bullCss2
+  : bearCss2
+
+css_area = (close - ts) * os < 0 ? retCss
+  : css
+
+osChange = os != os[1]
+
+
+var float ts_htf1 = na
+var float ts_htf2 = na
+var float ts_htf3 = na
+
+
+// MTF
+ts_htf1 := f_security(ticker, HTF1_str, ts, i_repaint)
+ts_htf2 := f_security(ticker, HTF2_str, ts, i_repaint)
+ts_htf3 := f_security(ticker, HTF3_str, ts, i_repaint)
+
+os_htf1 = f_security(ticker, HTF1_str, os, i_repaint)
+os_htf2 = f_security(ticker, HTF2_str, os, i_repaint)
+os_htf3 = f_security(ticker, HTF3_str, os, i_repaint)
+
+trendUp = os == 1 and osChange
+trendDown = os == -1 and osChange
+
+trendingUp = os == 1
+trendingDown = os == -1
+
+//MTF os
+trendingUpHTF1 = os_htf1 == 1
+trendingDownHTF1 = os_htf1 == -1
+trendingUpHTF2 = os_htf2 == 1
+trendingDownHTF2 = os_htf2 == -1
+trendingUpHTF3 = os_htf3 == 1
+trendingDownHTF3 = os_htf3 == -1
+
+trendstatusHTF1 = trendingUpHTF1 ? 'Up'
+  : trendingDownHTF1 ? 'Down'
+  : 'Neutral'
+
+trendstatusHTF2 = trendingUpHTF2 ? 'Up'
+  : trendingDownHTF2 ? 'Down'
+  : 'Neutral'
+
+trendstatusHTF3 = trendingUpHTF3 ? 'Up'
+  : trendingDownHTF3 ? 'Down'
+  : 'Neutral'
+
+trendChangeUpHTF1 = os_htf1 == 1 and (os_htf1 != os_htf1[1])
+trendChangeDownHTF1 = os_htf1 == -1 and (os_htf1 != os_htf1[1])
+trendChangeUpHTF2 = os_htf2 == 1 and (os_htf2 != os_htf2[1])
+trendChangeDownHTF2 = os_htf2 == -1 and (os_htf2 != os_htf2[1])
+trendChangeUpHTF3 = os_htf3 == 1 and (os_htf3 != os_htf3[1])
+trendChangeDownHTF3 = os_htf3 == -1 and (os_htf3 != os_htf3[1])
+
+
+above_ts_htf1 = close > ts_htf1
+below_ts_htf1 = close < ts_htf1
+above_ts_htf2 = close > ts_htf2
+below_ts_htf2 = close < ts_htf2
+above_ts_htf3 = close > ts_htf3
+below_ts_htf3 = close < ts_htf3
+
+alertcondition(ta.crossunder(close,ts), title='Price crossed down under Trail', message='{{ticker}} Price crossed down under Trail')
+alertcondition(ta.crossover(close,ts), title='Price crossed up over Trail', message='{{ticker}}Price crossed up over Trail')
+alertcondition(trendUp, title='Trend Change Up', message='{{ticker}} Trend Change Up')
+alertcondition(trendDown, title='Trend Change Down', message='{{ticker}} Trend Change Down')
+// end structure
+
+
+
+// random rules
+twobarup = close[1] > open[1] and close > open
+twobardown = close[1] < open[1] and close < open
+threebarup = close[2] > open[2] and close[1] > open[1] and close > open
+threebardown = close[2] < open[2] and close[1] < open[1] and close < open
+
+groupTitleLongEntry = "Long Entry"
+Struc_trigger_long_Input = input.bool(true, "Struc Trigger Long", group = groupTitleLongEntry)
+ht_long_trigger = input.bool(false, "Long HT Trigger", group = groupTitleLongEntry)
+exRev_long_trigger = input.bool(false, "Long Ex Rev Trigger", group = groupTitleLongEntry)
+NW_long_trigger = input.bool(false, "Long NW Trigger", group = groupTitleLongEntry)
+
+groupTitleLongFilters = "Long Filters"
+trendingUp_filter = input.bool(false, "trendingUp long trend filter", group = groupTitleLongFilters)
+twobarup_filter = input.bool(false, "2nd bar up filter", group = groupTitleLongFilters)
+above_ts_htf1_filter = input.bool(false, "Use hft1 long trend filter", group = groupTitleLongFilters)
+above_ts_htf2_filter = input.bool(false, "Use hft2 long trend filter", group = groupTitleLongFilters)
+above_ts_htf3_filter = input.bool(true, "Use hft3 long trend filter", group = groupTitleLongFilters)
+
+groupTitleShortEntry = "Short Entry"
+Struc_trigger_short_Input = input.bool(true, "Struc Trigger Short", group = groupTitleShortEntry)
+ht_short_trigger = input.bool(false, "Short HT Trigger", group = groupTitleShortEntry)
+exRev_short_trigger = input.bool(false, "Short Ex Rev Trigger", group = groupTitleShortEntry)
+NW_short_trigger = input.bool(false, "Short NW Trigger", group = groupTitleShortEntry)
+
+groupTitleShortFilters = "Short Filters"
+trendingDown_filter = input.bool(false, "trendingDown short trend filter", group = groupTitleShortFilters)
+twobardown_filter = input.bool(false, "2nd bar down filter", group = groupTitleShortFilters)
+below_ts_htf1_filter = input.bool(false, "Use hft1 short trend filter", group = groupTitleShortFilters)
+below_ts_htf2_filter = input.bool(false, "Use hft2 short trend filter", group = groupTitleShortFilters)
+below_ts_htf3_filter = input.bool(true, "Use hft3 short trend filter", group = groupTitleShortFilters)
+
+
+
+longsignal = (
+   (Struc_trigger_long_Input and trendUp) or
+   (ht_long_trigger and ht_buySignal) or
+   (exRev_long_trigger and exLongTrigger) or
+   (NW_long_trigger and NW_long)
+   ) and
+   (trendingUp_filter ? trendingUp : true) and
+   (above_ts_htf1_filter ? above_ts_htf1 : true) and
+   (above_ts_htf2_filter ? above_ts_htf2 : true) and
+   (above_ts_htf3_filter ? above_ts_htf3 : true) and
+   (twobarup_filter ? twobarup : true)
+
+shortsignal = (
+   (Struc_trigger_short_Input and trendDown) or
+   (ht_short_trigger and ht_sellSignal) or
+   (exRev_short_trigger and exShortTrigger) or
+   (NW_short_trigger and NW_short)
+   ) and
+   (trendingDown_filter ? trendingDown : true) and
+   (below_ts_htf1_filter ? below_ts_htf1 : true) and
+   (below_ts_htf2_filter ? below_ts_htf2 : true) and
+   (below_ts_htf3_filter ? below_ts_htf3 : true) and
+   (twobardown_filter ? twobardown : true)
+
+// Calculate signals
+signal := longsignal ? 1.0 : shortsignal ? -1.0 : na
+
+// Signal plots
+plot(signal, title="Signal", color=color.rgb(76, 175, 79, 94))
+plotshape(series=signal == 1.0, title='Long', style=shape.triangleup, location=location.belowbar, color=bullish, size=size.tiny)
+plotshape(series=signal == -1.0, title='Short', style=shape.triangledown, location=location.abovebar, color=bearish, size=size.tiny)
+// END Signals
+
+
+
+
+
+// SO Filters
+groupTitleSOFiltersLong = "SO Filters Long"
+trendingUp_filter_SO = input.bool(false, "trendingUp long trend filter", group = groupTitleSOFiltersLong)
+twobarup_filter_SO = input.bool(false, "2nd bar up filter", group = groupTitleSOFiltersLong)
+above_ts_htf1_filter_SO = input.bool(false, "Use hft1 long trend filter", group = groupTitleSOFiltersLong)
+above_ts_htf2_filter_SO = input.bool(false, "Use hft2 long trend filter", group = groupTitleSOFiltersLong)
+above_ts_htf3_filter_SO = input.bool(false, "Use hft3 long trend filter", group = groupTitleSOFiltersLong)
+
+groupTitleSOFiltersShort = "SO Filters Short"
+trendingDown_filter_SO = input.bool(false, "trendingDown short trend filter", group = groupTitleSOFiltersShort)
+twobardown_filter_SO = input.bool(false, "2nd bar down filter", group = groupTitleSOFiltersShort)
+below_ts_htf1_filter_SO = input.bool(false, "Use hft1 short trend filter", group = groupTitleSOFiltersShort)
+below_ts_htf2_filter_SO = input.bool(false, "Use hft2 short trend filter", group = groupTitleSOFiltersShort)
+below_ts_htf3_filter_SO = input.bool(false, "Use hft3 short trend filter", group = groupTitleSOFiltersShort)
+
+SO_filter_longs_cond = (trendingUp_filter_SO and trendingUp) or
+   (below_ts_htf1_filter_SO and below_ts_htf1) or
+   (below_ts_htf2_filter_SO and below_ts_htf2) or
+   (below_ts_htf3_filter_SO and below_ts_htf3) or
+   (twobardown_filter_SO and twobardown)
+
+SO_filter_shorts_cond = (trendingDown_filter_SO and trendingDown) or
+   (above_ts_htf1_filter_SO and above_ts_htf1) or
+   (above_ts_htf2_filter_SO and above_ts_htf2) or
+   (above_ts_htf3_filter_SO and above_ts_htf3) or
+   (twobarup_filter_SO and twobarup)
+
+var float SO_filter_longs_value = na
+var float SO_filter_shorts_value = na
+
+SO_filter_longs_value := SO_filter_longs_cond ? 1.0 : na
+SO_filter_shorts_value := SO_filter_shorts_cond ? -1.0 : na
+
+// Plot the values separately
+plot(SO_filter_longs_value, title="SO Filter Longs", color=color.rgb(76, 175, 79, 98))
+plot(SO_filter_shorts_value, title="SO Filter Shorts", color=color.rgb(255, 82, 82, 96))
+// END SO Filters
+
+
+//SO Triggers
+groupTitleSOTriggersLong = "SO Triggers Long"
+trendUpSOTrigger_Long = input.bool(false, "trendUp SO Trigger Long", group = groupTitleSOTriggersLong)
+trendUp_htf1_SOTrigger_Long = input.bool(false, "trendUp htf1 SO Trigger Long", group = groupTitleSOTriggersLong)
+trendUp_htf2_SOTrigger_Long = input.bool(false, "trendUp htf2 SO Trigger Long", group = groupTitleSOTriggersLong)
+trendUp_htf3_SOTrigger_Long = input.bool(false, "trendUp htf3 SO Trigger Long", group = groupTitleSOTriggersLong)
+
+groupTitleSOTriggersShort = "SO Triggers Short"
+trendDownSOTrigger_Short = input.bool(false, "trendDown SO Trigger Short", group = groupTitleSOTriggersShort)
+trendDown_htf1_SOTrigger_Short = input.bool(false, "trendDown htf1 SO Trigger Short", group = groupTitleSOTriggersShort)
+trendDown_htf2_SOTrigger_Short = input.bool(false, "trendDown htf2 SO Trigger Short", group = groupTitleSOTriggersShort)
+trendDown_htf3_SOTrigger_Short = input.bool(false, "trendDown htf3 SO Trigger Short", group = groupTitleSOTriggersShort)
+
+SO_trigger_longs_cond = (trendUpSOTrigger_Long and trendUp) or
+   (trendUp_htf1_SOTrigger_Long and trendChangeUpHTF1) or
+   (trendUp_htf2_SOTrigger_Long and trendChangeUpHTF2) or
+   (trendUp_htf3_SOTrigger_Long and trendChangeUpHTF3)
+
+SO_trigger_shorts_cond = (trendDownSOTrigger_Short and trendDown) or
+   (trendDown_htf1_SOTrigger_Short and trendChangeDownHTF1) or
+   (trendDown_htf2_SOTrigger_Short and trendChangeDownHTF2) or
+   (trendDown_htf3_SOTrigger_Short and trendChangeDownHTF3) 
+
+var float SO_trigger_longs_value = na
+var float SO_trigger_shorts_value = na
+
+SO_trigger_longs_value := SO_trigger_longs_cond ? 1.0 : na
+SO_trigger_shorts_value := SO_trigger_shorts_cond ? -1.0 : na
+
+//plotshape(SO_trigger_longs_value, title="SO Trigger Longs", color=bullish, style=shape.diamond, location = location.belowbar, size=size.tiny)
+//plotshape(SO_trigger_shorts_value, title="SO Trigger Shorts", color=bearish, style=shape.diamond, location = location.abovebar, size=size.tiny)
+
+SO_triggers := SO_trigger_longs_value ? 1.0 : SO_trigger_shorts_value ? -1.0 : na
+plot(SO_triggers, title="SO Triggers", color=color.rgb(76, 175, 79, 94))
+
+
+// HT plots
+// plotshape(ht_showArrows and ht_buySignal ? ht_atrLow : na, title='HT Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(ht_buyColor, 0))
+// plotshape(ht_showArrows and ht_sellSignal ? ht_atrHigh : na, title='HT Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(ht_sellColor, 0))
+plotshape(ht_showArrows and ht_buySignal and signal == 1 ? ht_atrLow : na, title='HT Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(ht_buyColor, 0))
+plotshape(ht_showArrows and ht_sellSignal and signal == -1 ? ht_atrHigh : na, title='HT Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(ht_sellColor, 0))
+// end HT plots
+
+
+
+// NW plots
+//plot(showMiddle ? yhat1 : na, "Rational Quadratic Kernel Estimate", color=plotColor, linewidth=1)
+//plot(yhat1 + multi, "Rational Quadratic Kernel Estimate", color=color.silver, linewidth=2)
+plotchar(showNWSignals and ta.crossover(close, upperjeje) and signal == -1, title='NW Down', char = "💧", location = location.abovebar, offset = 4, size = size.tiny)
+plotchar(showNWSignals and ta.crossunder(close, lowerjeje) and signal == 1, title='NW Up', char = "🚀", location = location.belowbar, offset = 5, size = size.tiny)
+// Alerts for Color Changes estimator
+alertcondition(smoothColors ? isBearishCross : isBearishChange, title='Bearish Color Change', message='Nadaraya-Watson: {{ticker}} ({{interval}}) turned Bearish ▼')
+alertcondition(smoothColors ? isBullishCross : isBullishChange, title='Bullish Color Change', message='Nadaraya-Watson: {{ticker}} ({{interval}}) turned Bullish ▲')
+
+// Alerts when price cross upper and lower band
+alertcondition(ta.crossover(close,upperjeje), title='Price close above upper band', message='Nadaraya-Watson: {{ticker}} ({{interval}}) Crossed above upper band 💧')
+alertcondition(ta.crossunder(close,lowerjeje), title='Price close under lower band', message='Nadaraya-Watson: {{ticker}} ({{interval}}) crossed under lower band 🚀')
+// end NW plots
+
+
+
+// reversal plots
+if sPFc and trdS and signal == -1
+    label.new(bar_index, b.h, 'S',  xloc.bar_index, yloc.price, bearish2, label.style_label_down, color.white, size.small, text.align_center, sTT + '\n\nnot a finacial advice, subject to high risk')
+
+if war and sTrd and b.o < b.c and S.sSC == 2 and not lTrd and signal == -1
+    label.new(bar_index, b.l, '⚠️',  xloc.bar_index, yloc.price, color.new(color.yellow, 100), label.style_label_up, bearish2, size.large, text.align_center, 'Warning\nbullish price flip detected')
+
+if war and sTrd and b.o < b.c and ((sSD[1] != 0 and b.c > sSD[1]) or (sCD[1] != 0 and b.c > sCD[1])) and signal == -1
+    label.new(bar_index, b.l, '⚠️',  xloc.bar_index, yloc.price, color.new(color.yellow, 100), label.style_label_up, bearish2, size.large, text.align_center, 'Critical Warning\nstop/risk level breached')
+
+if bPFc and trdS and signal == 1
+    label.new(bar_index, b.l, 'L',  xloc.bar_index, yloc.price, bullish2, label.style_label_up, color.white, size.small, text.align_center, lTT + '\n\nnot a finacial advice, subject to high risk')
+
+if war and lTrd and b.o > b.c and S.bSC == 2 and not sTrd and signal == 1
+    label.new(bar_index, b.h, '⚠️',  xloc.bar_index, yloc.price, color.new(color.blue, 100), label.style_label_down, bearish2, size.large, text.align_center, 'Warning\nbearish price flip detected')
+
+if war and lTrd and b.o > b.c and (b.c < bSD[1] or b.c < bCD[1]) and signal == 1
+    label.new(bar_index, b.h, '⚠️',  xloc.bar_index, yloc.price, color.new(color.blue, 100), label.style_label_down, bearish2, size.large, text.align_center, 'Critical Warning\nstop/risk level breached')
+
+// end reversal plots
+
+
+
+
+// Struc Plots
+plot_ts    = plot(showTS ? ts : na, 'Trailing Stop', color = css2)
+plotshape(showTrendChange ? trendUp : na, style=shape.triangleup, location=location.belowbar, color=bullish, size=size.tiny, title="Up Trend")
+plotshape(showTrendChange ? trendDown : na, style=shape.triangledown, location=location.abovebar, color=bearish, size=size.tiny, title="Down Trend")
+barcolor(showTrendChange and trendUp ? bullish : na)
+barcolor(showTrendChange and trendDown ? bearish : na)
+// Plot the trailing stops with individual checkboxes
+plot_ts_htf1 = plot(show_ts_htf1 ? ts_htf1 : na, 'HTF1 Trailing Stop', color = css)
+plot_ts_htf2 = plot(show_ts_htf2 ? ts_htf2 : na, 'HTF2 Trailing Stop', color = css)
+plot_ts_htf3 = plot(show_ts_htf3 ? ts_htf3 : na, 'HTF3 Trailing Stop', color = css)
+//plotshape(trendChangeUpHTF3, style=shape.triangleup, location=location.belowbar, color=bullish, size=size.small, title="Up Trend Change HTF3")
+//plotshape(trendChangeDownHTF3, style=shape.triangledown, location=location.abovebar, color=bearish, size=size.small, title="Up Trend Change HTF3")
+bgcolor(trendChangeUpHTF3 ? color.new(bullish, 80) : na)
+bgcolor(trendChangeDownHTF3 ? color.new(bearish, 80) : na)
+the_trend := trendingUp ? 1.0 : trendingDown ? -1.0 : na
+plot(the_trend, title="chart trend", color=color.rgb(76, 175, 79, 94))
+
+
+// Define invisible plots for high and low
+plot_high = plot(high, color=na)
+plot_low = plot(low, color=na)
+// Determine if the price is above or below the HTF2 trailing stop
+price_above_ts_htf2 = close > ts_htf2
+price_below_ts_htf2 = close < ts_htf2
+// Calculate midpoints
+midpoint_above_ts_htf2 = (high + ts_htf2) / 2
+midpoint_below_ts_htf2 = (low + ts_htf2) / 2
+midpoint_candle = (high + low) / 2
+plot_midpoint_candle = plot(midpoint_candle, color=na)
+plot_midpoint_above = plot(midpoint_above_ts_htf2, color=na)
+plot_midpoint_below = plot(midpoint_below_ts_htf2, color=na)
+// Define the colors for the gradients
+color bullishGradientTop = color.new(#08c9f0, 100)
+color bullishGradientBottom = color.new(#03d5fe, 80) 
+color bearishGradientTop = color.new(#fe02fe, 80) 
+color bearishGradientBottom = color.new(#f608f6, 100) 
+fill(plot_ts_htf2, plot_midpoint_candle, price_above_ts_htf2 ? ts_htf2 : na, high, bullishGradientTop, bullishGradientBottom)
+fill(plot_ts_htf2, plot_midpoint_candle, price_below_ts_htf2 ? low : na, ts_htf2, bearishGradientTop, bearishGradientBottom)
+
+
+
+var tbb = TTBTableBuilder.new(position.top_right,7,2)
+if barstate.isconfirmed
+	header = tbb.R(0).TextColor(color.rgb(18, 247, 255)).TextSize(size.small).Font(font.family_monospace)
+	header.Text("HTF2","HTF3","ATRP","ATRP_HTF1","AVG ATR","ATR")
+    tbb.R(1).TextColor(color.white).TextSize(size.small).Text(str.tostring(trendstatusHTF2),str.tostring(trendstatusHTF3),str.tostring(atrp),str.tostring(atrp_htf1),str.tostring(avg_atr),str.tostring(ATR)).Bg(color.rgb(255, 255, 255, 74))
+	// tbb.R(2).TextColor(color.white).TextSize(size.small).Text("A","B","C")

@@ -1,0 +1,19 @@
+// © Steversteves
+//@version=5
+indicator("Z-Score Forecaster[SS]", overlay=true, max_bars_back = 1000, max_labels_count = 500) 
+import Steversteves/Forecasting/1 as forecast 
+
+// User Inputs 
+zsrc =      input.source(close, "Z-Score Source")
+zlen =      input.int(75, "Z-Score Length")
+tbl =       input.bool(true, "Show Forecast Table") 
+flen =      input.int(14, "Forecast Length", minval = 1, maxval = 25)
+alerts =    input.bool(true, "Show Z-Score Alerts", tooltip = "This will display when Z-Score is at its Highest and Lowest within the lookback period.")
+sma =       input.bool(true, "Plot Z-Score SMA")
+
+forecast.zscore_forecast(zlen, zsrc, alerts, flen, tbl) 
+
+plot(sma ? ta.sma(zsrc, zlen) : na, "Z-Score SMA", color = color.purple, linewidth=3) 
+
+
+

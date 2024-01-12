@@ -449,8 +449,8 @@ if low < price_drop and window and strategy.position_size > 0
         max_drop := int((1 - price_drop / initial_price) * 10000) / 100
         drop_date := dayofmonth(time)
         drop_month := month(time)
-    price_change_percentage = ((initial_price - price_drop) / initial_price) * 100
-    max_drop_atrp := price_change_percentage / atr_value
+    max_drop_atrp_temp := ((initial_price - price_drop) / initial_price) / atrp_daily
+    max_drop_atrp := max_drop_atrp_temp > max_drop_atrp ? max_drop_atrp_temp : max_drop_atrp
     log.info("Max Drop ATRP: {0}, Max Drop: {1}, Price Drop: {2}, Date: {3}/{4}", max_drop_atrp, max_drop, price_drop, drop_month, drop_date)
 bgcolor(max_drop[1] < max_drop ? color.new(#00bbd4, 24) : na)
 plot(max_drop[1] < max_drop ? max_drop : na, title="Max Drop", color=color.new(color.red, 100))
@@ -463,8 +463,8 @@ if high > price_pump and window and strategy.position_size < 0
         max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
         pump_date := dayofmonth(time)
         pump_month := month(time)
-    price_increase_percentage = ((price_pump - initial_S_price) / initial_S_price) * 100
-    max_pump_atrp := price_increase_percentage / atr_value
+    max_pump_atrp_temp := ((price_pump - initial_S_price) / initial_S_price) / atrp_daily
+    max_pump_atrp := max_pump_atrp_temp > max_pump_atrp ? max_pump_atrp_temp : max_pump_atrp
     log.info("Max Pump ATRP: {0}, Max Pump: {1}, Price Pump: {2}, Date: {3}/{4}", max_pump_atrp, max_pump, price_pump, pump_month, pump_date)
 bgcolor(max_pump[1] < max_pump ? color.new(#9b27b0, 22) : na)
 plot(max_pump[1] < max_pump ? max_pump : na, title="Max Pump", color=color.new(color.green, 100))

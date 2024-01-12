@@ -1,0 +1,42 @@
+//@version=5
+indicator("TTB Price Range %", overlay = true, max_labels_count = 500)
+
+// Define the lookback period and higher timeframe as user inputs
+lookbackPeriod = input(720, title="Lookback Period")
+higherTimeframe = input("D", title="Higher Timeframe")
+
+// Define a function to get the highest high, lowest low, range percent, and time
+getValues(sym, tf) =>
+    highestHigh = ta.highest(high, lookbackPeriod)
+    lowestLow = ta.lowest(low, lookbackPeriod)
+    Yrange = highestHigh - lowestLow
+    rangePercent = (Yrange / close) * 100
+    barTime = time
+    [highestHigh, lowestLow, rangePercent, barTime]
+
+// Use the security function to get the values from the higher timeframe
+[highestHigh, lowestLow, rangePercentWeekly, barHTF] = request.security(syminfo.tickerid, higherTimeframe, getValues(syminfo.tickerid, higherTimeframe))
+
+// Declare the line variables
+line lineHigh = na
+line lineLow = na
+
+// Delete the previous lines and draw the new ones
+if (not na(lineHigh))
+    line.delete(lineHigh)
+if (not na(lineLow))
+    line.delete(lineLow)
+
+lineHigh := line.new(x1 = barHTF[lookbackPeriod], y1 = highestHigh, x2 = barHTF, y2 = highestHigh, color = color.red, width = 2, xloc = xloc.bar_time)
+lineLow := line.new(x1 = barHTF[lookbackPeriod], y1 = lowestLow, x2 = barHTF, y2 = lowestLow, color = color.green, width = 2, xloc = xloc.bar_time)
+
+// Extend the lines to the left and right of the chart
+line.set_x1(lineHigh, barHTF[0])
+line.set_x2(lineHigh, barHTF)
+line.set_x1(lineLow, barHTF[0])
+line.set_x2(lineLow, barHTF)
+
+// Add the range percent text to the lines
+if (barstate.islast)
+    label.new(x = time, y = highestHigh, text = "Range Percent: " + str.tostring(rangePercentWeekly), xloc = xloc.bar_time, yloc = yloc.price, color = color.red, style = label.style_label_down, size = size.small)
+    label.new(x = time, y = lowestLow, text = "Range Percent: " + str.tostring(rangePercentWeekly), xloc = xloc.bar_time, yloc = yloc.price, color = color.green, style = label.style_label_up, size = size.small)

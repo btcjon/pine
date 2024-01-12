@@ -1,0 +1,554 @@
+//  /$$$$$$   /$$                                                         /$$                                            
+// /$$__  $$ | $$                                                        | $$                                            
+//| $$  \__//$$$$$$    /$$$$$$  /$$    /$$ /$$$$$$   /$$$$$$   /$$$$$$$ /$$$$$$    /$$$$$$  /$$    /$$ /$$$$$$   /$$$$$$$
+//|  $$$$$$|_  $$_/   /$$__  $$|  $$  /$$//$$__  $$ /$$__  $$ /$$_____/|_  $$_/   /$$__  $$|  $$  /$$//$$__  $$ /$$_____/
+// \____  $$ | $$    | $$$$$$$$ \  $$/$$/| $$$$$$$$| $$  \__/|  $$$$$$   | $$    | $$$$$$$$ \  $$/$$/| $$$$$$$$|  $$$$$$ 
+// /$$  \ $$ | $$ /$$| $$_____/  \  $$$/ | $$_____/| $$       \____  $$  | $$ /$$| $$_____/  \  $$$/ | $$_____/ \____  $$
+//|  $$$$$$/ |  $$$$/|  $$$$$$$   \  $/  |  $$$$$$$| $$       /$$$$$$$/  |  $$$$/|  $$$$$$$   \  $/  |  $$$$$$$ /$$$$$$$/
+// \______/   \___/   \_______/    \_/    \_______/|__/      |_______/    \___/   \_______/    \_/    \_______/|_______/ 
+
+//       ___________________
+//      /                   \
+//     /  _____        _____ \
+//    /  /     \      /     \  \
+// __/__/       \____/       \__\_____
+//|           ___________           ____|
+// \_________/           \_________/
+//            \  /////// /
+//             \/////////
+// © Steversteves
+
+//@version=5
+indicator("Ticker Correlation Matrix Table and Heatmap [SS]", shorttitle = "Ticker Correlation Heatmap [SS]")
+
+// Groups // 
+g1 = "Assessment Settings" 
+g2 = "Mathmatical Expression"
+g3 = "Chart Displays" 
+g4 = "Ticker Select" 
+g5 = "Ticker Displays" 
+
+// User Inputs // 
+corlen =    input.int(75, "Correlation Length", group = g1) 
+timeframe = input.timeframe("D", "Timeframe", group = g1)
+src =       input.source(close, "Assessment Source", group = g1)
+eq2 =       input.string("None", "Convert Ticker from:", ["None", "Ticker 1", "Ticker 2", "Ticker 3", "Ticker 4", "Ticker 5", "Ticker 6", "Ticker 7", "Ticker 8", "Ticker 9", "Ticker 10"], group=g2)
+eq1 =       input.string("None", "Convert Ticker to:", ["None", "Ticker 1", "Ticker 2", "Ticker 3", "Ticker 4", "Ticker 5", "Ticker 6", "Ticker 7", "Ticker 8", "Ticker 9", "Ticker 10"], group = g2)
+showdemo =  input.bool(true, "Show Demographic Table", group=g3)
+
+ticker1 =   input.symbol("AMEX:SPY", "Ticker 1", group=g4)
+ticker2 =   input.symbol("NASDAQ:MSFT", "Ticker 2", group = g4)
+ticker3 =   input.symbol("NASDAQ:AAPL", "Ticker 3", group = g4)
+ticker4 =   input.symbol("NASDAQ:QQQ", "Ticker 4", group = g4)
+ticker5 =   input.symbol("AMEX:UPRO", "Ticker 5", group=g4)
+ticker6 =   input.symbol("AMEX:DIA", "Ticker 6", group=g4)
+ticker7 =   input.symbol("NYSE:BA", "Ticker 7", group = g4)
+ticker8 =   input.symbol("NYSE:XOM", "Ticker 8", group=g4)
+ticker9 =   input.symbol("AMEX:XLE", "Ticker 9", group = g4)
+ticker10 =  input.symbol("AMEX:XLF", "Ticker 10", group = g4)
+
+t1s =       input.bool(true, "Show Ticker 1", group = g5) 
+t2s =       input.bool(true, "Show Ticker 2", group = g5)
+t3s =       input.bool(true, "Show Ticker 3", group = g5)
+t4s =       input.bool(true, "show Ticker 4", group = g5) 
+t5s =       input.bool(true, "Show Ticker 5", group = g5)
+t6s =       input.bool(true, "Show Ticker 6", group = g5) 
+t7s =       input.bool(true, "Show Ticker 7", group = g5)
+t8s =       input.bool(true, "Show Ticker 8", group = g5)
+t9s =       input.bool(true, "Show Ticker 9", group = g5)
+t10s =      input.bool(true, "Show Ticker 10", group = g5) 
+
+// Colours //
+
+color green1 =  color.new(color.lime, 85)
+color green2 =  color.new(color.lime, 75) 
+color green3 =  color.new(color.lime, 65)
+color green4 =  color.new(color.lime, 55) 
+color green5 =  color.new(color.lime, 45) 
+color red1 =    color.new(color.rgb(240, 0, 8), 85) 
+color red2 =    color.new(color.rgb(240, 0, 8), 75) 
+color red3 =    color.new(color.rgb(240, 0, 8), 65) 
+color red4 =    color.new(color.rgb(240, 0, 8), 55) 
+color red5 =    color.new(color.rgb(240, 0, 8), 45) 
+color orange1 = color.new(color.orange, 85)
+color orange2 = color.new(color.orange, 75)
+color orange3 = color.new(color.orange, 65)
+color orange4 = color.new(color.orange, 55)
+color orange5 = color.new(color.orange, 0)
+color black =   color.rgb(0, 0, 0) 
+color white =   color.white 
+
+// Functions // 
+sc(ticker) => 
+    request.security(ticker, timeframe, src, lookahead = barmerge.lookahead_on)
+cor(one, two) => 
+    ta.correlation(one, two, corlen) 
+colour(cor) => 
+    if cor >= 0.5 and cor < 0.6 
+        green1 
+    else if cor >= 0.6 and cor < 0.7 
+        green2 
+    else if cor >= 0.7 and cor < 0.8 
+        green3 
+    else if cor >= 0.8 and cor < 0.9 
+        green4
+    else if cor >= 0.9 
+        green5
+    else if cor < 0.5 and cor > 0.4
+        orange1 
+    else if cor <= 0.4 and cor > 0.3 
+        orange2 
+    else if cor <= 0.3 and cor > 0.2 
+        orange3 
+    else if cor <= 0.2 and cor > 0.1 
+        orange4 
+    else if cor <= 0.1 and cor > 0 
+        orange5 
+    else if cor <= 0 and cor > -0.1 
+        orange5 
+    else if cor <= -0.1 and cor > -0.2 
+        orange4 
+    else if cor <= -0.2 and cor > -0.3 
+        orange3 
+    else if cor <= -0.3 and cor > -0.4 
+        orange2
+    else if cor <= -0.4 and cor > -0.5 
+        orange1 
+    else if cor <= -0.5 and cor > -0.6
+        red1 
+    else if cor <= -0.6 and cor > -0.7 
+        red2
+    else if cor <= -0.7 and cor > -0.8 
+        red3  
+    else if cor <= -0.8 and cor > -0.9 
+        red4 
+    else if cor <= -0.9 
+        red5 
+
+// Request Security //
+t1 = sc(ticker1)
+t2 = sc(ticker2) 
+t3 = sc(ticker3) 
+t4 = sc(ticker4) 
+t5 = sc(ticker5)
+t6 = sc(ticker6) 
+t7 = sc(ticker7)
+t8 = sc(ticker8) 
+t9 = sc(ticker9) 
+t10 = sc(ticker10) 
+
+// Ticker 1 
+t1_t1 = cor(t1, t1) 
+t1_t2 = cor(t1, t2) 
+t1_t3 = cor(t1, t3) 
+t1_t4 = cor(t1, t4) 
+t1_t5 = cor(t1, t5) 
+t1_t6 = cor(t1, t6) 
+t1_t7 = cor(t1, t7) 
+t1_t8 = cor(t1, t8) 
+t1_t9 = cor(t1, t9) 
+t1_t10 = cor(t1, t10) 
+
+// Ticker 2 
+t2_t1 = cor(t2, t1)
+t2_t2 = cor(t2, t2) 
+t2_t3 = cor(t2, t3) 
+t2_t4 = cor(t2, t4) 
+t2_t5 = cor(t2, t5) 
+t2_t6 = cor(t2, t6) 
+t2_t7 = cor(t2, t7) 
+t2_t8 = cor(t2, t8) 
+t2_t9 = cor(t2, t9) 
+t2_t10 = cor(t2, t10) 
+
+// Ticker 3
+t3_t1 = cor(t3, t1)
+t3_t2 = cor(t3, t2) 
+t3_t3 = cor(t3, t3) 
+t3_t4 = cor(t3, t4) 
+t3_t5 = cor(t3, t5) 
+t3_t6 = cor(t3, t6) 
+t3_t7 = cor(t3, t7) 
+t3_t8 = cor(t3, t8) 
+t3_t9 = cor(t3, t9) 
+t3_t10 = cor(t3, t10) 
+
+// Ticker 4
+t4_t1 = cor(t4, t1)
+t4_t2 = cor(t4, t2) 
+t4_t3 = cor(t4, t3) 
+t4_t4 = cor(t4, t4) 
+t4_t5 = cor(t4, t5) 
+t4_t6 = cor(t4, t6) 
+t4_t7 = cor(t4, t7) 
+t4_t8 = cor(t4, t8) 
+t4_t9 = cor(t4, t9) 
+t4_t10 = cor(t4, t10) 
+
+// Ticker 5
+t5_t1 = cor(t5, t1)
+t5_t2 = cor(t5, t2) 
+t5_t3 = cor(t5, t3) 
+t5_t4 = cor(t5, t4) 
+t5_t5 = cor(t5, t5) 
+t5_t6 = cor(t5, t6) 
+t5_t7 = cor(t5, t7) 
+t5_t8 = cor(t5, t8) 
+t5_t9 = cor(t5, t9) 
+t5_t10 = cor(t5, t10) 
+
+// Ticker 6
+t6_t1 = cor(t6, t1)
+t6_t2 = cor(t6, t2) 
+t6_t3 = cor(t6, t3) 
+t6_t4 = cor(t6, t4) 
+t6_t5 = cor(t6, t5) 
+t6_t6 = cor(t6, t6) 
+t6_t7 = cor(t6, t7) 
+t6_t8 = cor(t6, t8) 
+t6_t9 = cor(t6, t9) 
+t6_t10 = cor(t6, t10) 
+
+// Ticker 7
+t7_t1 = cor(t7, t1)
+t7_t2 = cor(t7, t2) 
+t7_t3 = cor(t7, t3) 
+t7_t4 = cor(t7, t4) 
+t7_t5 = cor(t7, t5) 
+t7_t6 = cor(t7, t6) 
+t7_t7 = cor(t7, t7) 
+t7_t8 = cor(t7, t8) 
+t7_t9 = cor(t7, t9) 
+t7_t10 = cor(t7, t10) 
+
+// Ticker 8
+t8_t1 = cor(t8, t1)
+t8_t2 = cor(t8, t2) 
+t8_t3 = cor(t8, t3) 
+t8_t4 = cor(t8, t4) 
+t8_t5 = cor(t8, t5) 
+t8_t6 = cor(t8, t6) 
+t8_t7 = cor(t8, t7) 
+t8_t8 = cor(t8, t8) 
+t8_t9 = cor(t8, t9) 
+t8_t10 = cor(t8, t10) 
+
+// Ticker 9
+t9_t1 = cor(t9, t1)
+t9_t2 = cor(t9, t2) 
+t9_t3 = cor(t9, t3) 
+t9_t4 = cor(t9, t4) 
+t9_t5 = cor(t9, t5) 
+t9_t6 = cor(t9, t6) 
+t9_t7 = cor(t9, t7) 
+t9_t8 = cor(t9, t8) 
+t9_t9 = cor(t9, t9) 
+t9_t10 = cor(t9, t10) 
+
+// Ticker 10
+t10_t1 = cor(t10, t1)
+t10_t2 = cor(t10, t2) 
+t10_t3 = cor(t10, t3) 
+t10_t4 = cor(t10, t4) 
+t10_t5 = cor(t10, t5) 
+t10_t6 = cor(t10, t6) 
+t10_t7 = cor(t10, t7) 
+t10_t8 = cor(t10, t8) 
+t10_t9 = cor(t10, t9) 
+t10_t10 = cor(t10, t10) 
+
+var table cortable = table.new(position.middle_center, 15, 15, bgcolor = black, frame_color = white, frame_width = 2)
+
+// Ticker 1 
+if t1s 
+    table.cell(cortable, 1, 1, text = str.tostring(ticker1), bgcolor = black, text_color = white)
+    table.cell(cortable, 0, 2, text = str.tostring(ticker1), bgcolor = black, text_color = white) 
+    table.cell(cortable, 1, 2, text = str.tostring(math.round(t1_t1,2)), bgcolor = colour(t1_t1), text_color = white)
+
+
+// Ticker 2
+if t2s 
+    table.cell(cortable, 0, 3, text = str.tostring(ticker2), bgcolor = black, text_color = white) 
+    table.cell(cortable, 2, 1, text = str.tostring(ticker2), bgcolor = black, text_color = white)
+    table.cell(cortable, 2, 2, text = str.tostring(math.round(t2_t1,2)), bgcolor = colour(t2_t1), text_color = white)
+    table.cell(cortable, 2, 3, text = str.tostring(math.round(t2_t2,2)), bgcolor = colour(t2_t2), text_color = white)
+    table.cell(cortable, 1, 3, text = str.tostring(math.round(t1_t2,2)), bgcolor = colour(t1_t2), text_color = white)
+
+
+// Ticker 3
+if t3s 
+    table.cell(cortable, 0, 4, text = str.tostring(ticker3), bgcolor = black, text_color = white) 
+    table.cell(cortable, 3, 1, text = str.tostring(ticker3), bgcolor = black, text_color = white)
+    table.cell(cortable, 3, 2, text = str.tostring(math.round(t3_t1,2)), bgcolor = colour(t3_t1), text_color = white)
+    table.cell(cortable, 1, 4, text = str.tostring(math.round(t1_t3,3)), bgcolor = colour(t1_t3), text_color = white)
+    table.cell(cortable, 3, 3, text = str.tostring(math.round(t3_t2,2)), bgcolor = colour(t3_t2), text_color = white)
+    table.cell(cortable, 3, 4, text = str.tostring(math.round(t3_t3,3)), bgcolor = colour(t3_t3), text_color = white)
+    table.cell(cortable, 2, 4, text = str.tostring(math.round(t2_t3,3)), bgcolor = colour(t2_t3), text_color = white)
+
+
+// Ticker 4 
+if t4s 
+    table.cell(cortable, 0, 5, text = str.tostring(ticker4), bgcolor = black, text_color = white) 
+    table.cell(cortable, 4, 1, text = str.tostring(ticker4), bgcolor = black, text_color = white) 
+    table.cell(cortable, 4, 2, text = str.tostring(math.round(t4_t1,2)), bgcolor = colour(t4_t1), text_color = white)
+    table.cell(cortable, 4, 3, text = str.tostring(math.round(t4_t2,2)), bgcolor = colour(t4_t2), text_color = white)
+    table.cell(cortable, 4, 4, text = str.tostring(math.round(t4_t3,3)), bgcolor = colour(t4_t3), text_color = white)
+    table.cell(cortable, 4, 5, text = str.tostring(math.round(t4_t4,2)), bgcolor = colour(t4_t4), text_color = white)
+    table.cell(cortable, 1, 5, text = str.tostring(math.round(t1_t4,2)), bgcolor = colour(t1_t4), text_color = white)
+    table.cell(cortable, 2, 5, text = str.tostring(math.round(t2_t4,2)), bgcolor = colour(t2_t4), text_color = white)
+    table.cell(cortable, 3, 5, text = str.tostring(math.round(t3_t4,2)), bgcolor = colour(t3_t4), text_color = white)
+
+
+// Ticker 5
+
+if t5s 
+    table.cell(cortable, 0, 6, text = str.tostring(ticker5), bgcolor = black, text_color = white) 
+    table.cell(cortable, 5, 1, text = str.tostring(ticker5), bgcolor = black, text_color = white)
+    table.cell(cortable, 5, 2, text = str.tostring(math.round(t5_t1,2)), bgcolor = colour(t5_t1), text_color = white)
+    table.cell(cortable, 5, 3, text = str.tostring(math.round(t5_t2,2)), bgcolor = colour(t5_t2), text_color = white)
+    table.cell(cortable, 5, 4, text = str.tostring(math.round(t5_t3,3)), bgcolor = colour(t5_t3), text_color = white)
+    table.cell(cortable, 5, 5, text = str.tostring(math.round(t5_t4,2)), bgcolor = colour(t5_t4), text_color = white)
+    table.cell(cortable, 5, 6, text = str.tostring(math.round(t5_t5,2)), bgcolor = colour(t5_t5), text_color = white)
+    table.cell(cortable, 2, 6, text = str.tostring(math.round(t2_t5,2)), bgcolor = colour(t2_t5), text_color = white)
+    table.cell(cortable, 1, 6, text = str.tostring(math.round(t1_t5,2)), bgcolor = colour(t1_t5), text_color = white)
+    table.cell(cortable, 3, 6, text = str.tostring(math.round(t3_t5,2)), bgcolor = colour(t3_t5), text_color = white)
+    table.cell(cortable, 4, 6, text = str.tostring(math.round(t4_t5,2)), bgcolor = colour(t4_t5), text_color = white)
+
+
+// Ticker 6
+if t6s 
+    table.cell(cortable, 0, 7, text = str.tostring(ticker6), bgcolor = black, text_color = white) 
+    table.cell(cortable, 6, 1, text = str.tostring(ticker6), bgcolor = black, text_color = white)
+    table.cell(cortable, 6, 2, text = str.tostring(math.round(t6_t1,2)), bgcolor = colour(t6_t1), text_color = white)
+    table.cell(cortable, 6, 3, text = str.tostring(math.round(t6_t2,2)), bgcolor = colour(t6_t2), text_color = white)
+    table.cell(cortable, 6, 4, text = str.tostring(math.round(t6_t3,3)), bgcolor = colour(t6_t3), text_color = white)
+    table.cell(cortable, 6, 5, text = str.tostring(math.round(t6_t4,2)), bgcolor = colour(t6_t4), text_color = white)
+    table.cell(cortable, 6, 6, text = str.tostring(math.round(t6_t5,2)), bgcolor = colour(t6_t5), text_color = white)
+    table.cell(cortable, 6, 7, text = str.tostring(math.round(t6_t6,2)), bgcolor = colour(t6_t6), text_color = white)
+    table.cell(cortable, 2, 7, text = str.tostring(math.round(t2_t6,2)), bgcolor = colour(t2_t6), text_color = white)
+    table.cell(cortable, 1, 7, text = str.tostring(math.round(t1_t6,2)), bgcolor = colour(t1_t6), text_color = white)
+    table.cell(cortable, 3, 7, text = str.tostring(math.round(t3_t6,2)), bgcolor = colour(t3_t6), text_color = white)
+    table.cell(cortable, 4, 7, text = str.tostring(math.round(t4_t6,2)), bgcolor = colour(t4_t6), text_color = white)
+    table.cell(cortable, 5, 7, text = str.tostring(math.round(t5_t6,2)), bgcolor = colour(t5_t6), text_color = white)
+
+
+// Ticker 7 
+if t7s 
+    table.cell(cortable, 7, 1, text = str.tostring(ticker7), bgcolor = black, text_color = white)
+    table.cell(cortable, 0, 8, text = str.tostring(ticker7), bgcolor = black, text_color = white)
+    table.cell(cortable, 7, 2, text = str.tostring(math.round(t7_t1,2)), bgcolor = colour(t7_t1), text_color = white)
+    table.cell(cortable, 7, 3, text = str.tostring(math.round(t7_t2,2)), bgcolor = colour(t7_t2), text_color = white)
+    table.cell(cortable, 7, 4, text = str.tostring(math.round(t7_t3,3)), bgcolor = colour(t7_t3), text_color = white)
+    table.cell(cortable, 7, 5, text = str.tostring(math.round(t7_t4,2)), bgcolor = colour(t7_t4), text_color = white)
+    table.cell(cortable, 7, 6, text = str.tostring(math.round(t7_t5,2)), bgcolor = colour(t7_t5), text_color = white)
+    table.cell(cortable, 7, 7, text = str.tostring(math.round(t7_t6,2)), bgcolor = colour(t7_t6), text_color = white)
+    table.cell(cortable, 7, 8, text = str.tostring(math.round(t7_t7,2)), bgcolor = colour(t7_t7), text_color = white)
+    table.cell(cortable, 2, 8, text = str.tostring(math.round(t2_t7,2)), bgcolor = colour(t2_t7), text_color = white)
+    table.cell(cortable, 1, 8, text = str.tostring(math.round(t1_t7,2)), bgcolor = colour(t1_t7), text_color = white)
+    table.cell(cortable, 3, 8, text = str.tostring(math.round(t3_t7,2)), bgcolor = colour(t3_t7), text_color = white)
+    table.cell(cortable, 4, 8, text = str.tostring(math.round(t4_t7,2)), bgcolor = colour(t4_t7), text_color = white)
+    table.cell(cortable, 5, 8, text = str.tostring(math.round(t5_t7,2)), bgcolor = colour(t5_t7), text_color = white)
+    table.cell(cortable, 6, 8, text = str.tostring(math.round(t6_t7,2)), bgcolor = colour(t6_t7), text_color = white)
+
+
+// Ticker 8 
+if t8s 
+    table.cell(cortable, 8, 1, text = str.tostring(ticker8), bgcolor = black, text_color = white)
+    table.cell(cortable, 0, 9, text = str.tostring(ticker8), bgcolor = black, text_color = white) 
+    table.cell(cortable, 8, 2, text = str.tostring(math.round(t8_t1,2)), bgcolor = colour(t8_t1), text_color = white)
+    table.cell(cortable, 8, 3, text = str.tostring(math.round(t8_t2,2)), bgcolor = colour(t8_t2), text_color = white)
+    table.cell(cortable, 8, 4, text = str.tostring(math.round(t8_t3,3)), bgcolor = colour(t8_t3), text_color = white)
+    table.cell(cortable, 8, 5, text = str.tostring(math.round(t8_t4,2)), bgcolor = colour(t8_t4), text_color = white)
+    table.cell(cortable, 8, 6, text = str.tostring(math.round(t8_t5,2)), bgcolor = colour(t8_t5), text_color = white)
+    table.cell(cortable, 8, 7, text = str.tostring(math.round(t8_t6,2)), bgcolor = colour(t8_t6), text_color = white)
+    table.cell(cortable, 8, 8, text = str.tostring(math.round(t8_t7,2)), bgcolor = colour(t8_t7), text_color = white)
+    table.cell(cortable, 8, 9, text = str.tostring(math.round(t8_t8,2)), bgcolor = colour(t8_t8), text_color = white)
+    table.cell(cortable, 2, 9, text = str.tostring(math.round(t2_t8,2)), bgcolor = colour(t2_t8), text_color = white)
+    table.cell(cortable, 1, 9, text = str.tostring(math.round(t1_t8,2)), bgcolor = colour(t1_t8), text_color = white)
+    table.cell(cortable, 3, 9, text = str.tostring(math.round(t3_t8,2)), bgcolor = colour(t3_t8), text_color = white)
+    table.cell(cortable, 4, 9, text = str.tostring(math.round(t4_t8,2)), bgcolor = colour(t4_t8), text_color = white)
+    table.cell(cortable, 5, 9, text = str.tostring(math.round(t5_t8,2)), bgcolor = colour(t5_t8), text_color = white)
+    table.cell(cortable, 6, 9, text = str.tostring(math.round(t6_t8,2)), bgcolor = colour(t6_t8), text_color = white)
+    table.cell(cortable, 7, 9, text = str.tostring(math.round(t7_t8,2)), bgcolor = colour(t7_t8), text_color = white)
+
+
+// Ticker 9 
+if t9s 
+    table.cell(cortable, 9, 1, text = str.tostring(ticker9), bgcolor = black, text_color = white) 
+    table.cell(cortable, 0, 10, text = str.tostring(ticker9), bgcolor = black, text_color = white) 
+    table.cell(cortable, 9, 2, text = str.tostring(math.round(t9_t1,2)), bgcolor = colour(t9_t1), text_color = white)
+    table.cell(cortable, 9, 3, text = str.tostring(math.round(t9_t2,2)), bgcolor = colour(t9_t2), text_color = white)
+    table.cell(cortable, 9, 4, text = str.tostring(math.round(t9_t3,3)), bgcolor = colour(t9_t3), text_color = white)
+    table.cell(cortable, 9, 5, text = str.tostring(math.round(t9_t4,2)), bgcolor = colour(t9_t4), text_color = white)
+    table.cell(cortable, 9, 6, text = str.tostring(math.round(t9_t5,2)), bgcolor = colour(t9_t5), text_color = white)
+    table.cell(cortable, 9, 7, text = str.tostring(math.round(t9_t6,2)), bgcolor = colour(t9_t6), text_color = white)
+    table.cell(cortable, 9, 8, text = str.tostring(math.round(t9_t7,2)), bgcolor = colour(t9_t7), text_color = white)
+    table.cell(cortable, 9, 9, text = str.tostring(math.round(t9_t8,2)), bgcolor = colour(t9_t8), text_color = white)
+    table.cell(cortable, 9, 10, text = str.tostring(math.round(t9_t9,2)), bgcolor = colour(t9_t9), text_color = white)
+    table.cell(cortable, 2, 10, text = str.tostring(math.round(t2_t9,2)), bgcolor = colour(t2_t9), text_color = white)
+    table.cell(cortable, 1, 10, text = str.tostring(math.round(t1_t9,2)), bgcolor = colour(t1_t9), text_color = white)
+    table.cell(cortable, 3, 10, text = str.tostring(math.round(t3_t9,2)), bgcolor = colour(t3_t9), text_color = white)
+    table.cell(cortable, 4, 10, text = str.tostring(math.round(t4_t9,2)), bgcolor = colour(t4_t9), text_color = white)
+    table.cell(cortable, 5, 10, text = str.tostring(math.round(t5_t9,2)), bgcolor = colour(t5_t9), text_color = white)
+    table.cell(cortable, 6, 10, text = str.tostring(math.round(t6_t9,2)), bgcolor = colour(t6_t9), text_color = white)
+    table.cell(cortable, 7, 10, text = str.tostring(math.round(t7_t9,2)), bgcolor = colour(t7_t9), text_color = white)
+    table.cell(cortable, 8, 10, text = str.tostring(math.round(t8_t9,2)), bgcolor = colour(t8_t9), text_color = white)
+
+
+
+// Ticker 10
+if t10s 
+    table.cell(cortable, 10, 1, text = str.tostring(ticker10), bgcolor = black, text_color = white) 
+    table.cell(cortable, 0, 11, text = str.tostring(ticker10), bgcolor = black, text_color = white)
+    table.cell(cortable, 10, 2, text = str.tostring(math.round(t10_t1,2)), bgcolor = colour(t10_t1), text_color = white)
+    table.cell(cortable, 10, 3, text = str.tostring(math.round(t10_t2,2)), bgcolor = colour(t10_t2), text_color = white)
+    table.cell(cortable, 10, 4, text = str.tostring(math.round(t10_t3,3)), bgcolor = colour(t10_t3), text_color = white)
+    table.cell(cortable, 10, 5, text = str.tostring(math.round(t10_t4,2)), bgcolor = colour(t10_t4), text_color = white)
+    table.cell(cortable, 10, 6, text = str.tostring(math.round(t10_t5,2)), bgcolor = colour(t10_t5), text_color = white)
+    table.cell(cortable, 10, 7, text = str.tostring(math.round(t10_t6,2)), bgcolor = colour(t10_t6), text_color = white)
+    table.cell(cortable, 10, 8, text = str.tostring(math.round(t10_t7,2)), bgcolor = colour(t10_t7), text_color = white)
+    table.cell(cortable, 10, 9, text = str.tostring(math.round(t10_t8,2)), bgcolor = colour(t10_t8), text_color = white)
+    table.cell(cortable, 10, 10, text = str.tostring(math.round(t10_t9,2)), bgcolor = colour(t10_t9), text_color = white)
+    table.cell(cortable, 1, 11, text = str.tostring(math.round(t1_t10,2)), bgcolor = colour(t1_t10), text_color = white)
+    table.cell(cortable, 2, 11, text = str.tostring(math.round(t2_t10,2)), bgcolor = colour(t2_t10), text_color = white)
+    table.cell(cortable, 10, 11, text = str.tostring(math.round(t10_t10,2)), bgcolor = colour(t10_t10), text_color = white)
+    table.cell(cortable, 3, 11, text = str.tostring(math.round(t3_t10,2)), bgcolor = colour(t3_t10), text_color = white)
+    table.cell(cortable, 4, 11, text = str.tostring(math.round(t4_t10,2)), bgcolor = colour(t4_t10), text_color = white)
+    table.cell(cortable, 5, 11, text = str.tostring(math.round(t5_t10,2)), bgcolor = colour(t5_t10), text_color = white)
+    table.cell(cortable, 6, 11, text = str.tostring(math.round(t6_t10,2)), bgcolor = colour(t6_t10), text_color = white)
+    table.cell(cortable, 7, 11, text = str.tostring(math.round(t7_t10,2)), bgcolor = colour(t7_t10), text_color = white)
+    table.cell(cortable, 8, 11, text = str.tostring(math.round(t8_t10,2)), bgcolor = colour(t8_t10), text_color = white)
+    table.cell(cortable, 9, 11, text = str.tostring(math.round(t9_t10,2)), bgcolor = colour(t9_t10), text_color = white)
+
+var table demo = table.new(position.bottom_right, 2, 4, bgcolor = black, frame_color = white, frame_width = 2)
+
+if showdemo 
+    table.cell(demo, 1, 1, text = "Demographics", bgcolor = black, text_color = white) 
+    table.cell(demo, 1, 2, text = "Timeframe: " + str.tostring(timeframe), bgcolor = black, text_color = white) 
+    table.cell(demo, 1, 3, text = "Assessment Length: " + str.tostring(corlen) + " Candles", bgcolor = black, text_color = white) 
+
+// Conversions 
+float input_1 = 0.0 
+float input_2 = 0.0 
+string ticker_input = na 
+string ticker_output = na 
+
+if eq1 == "Ticker 1" 
+    input_1 := t1 
+    ticker_input := ticker1 
+if eq1 == "Ticker 2" 
+    input_1 := t2 
+    ticker_input := ticker2 
+if eq1 == "Ticker 3" 
+    input_1 := t3 
+    ticker_input := ticker3 
+if eq1 == "Ticker 4" 
+    input_1 := t4
+    ticker_input := ticker4 
+if eq1 == "Ticker 5" 
+    input_1 := t5 
+    ticker_input := ticker5 
+if eq1 == "Ticker 6" 
+    input_1 := t6 
+    ticker_input := ticker6
+if eq1 == "Ticker 7" 
+    input_1 := t7 
+    ticker_input := ticker7 
+if eq1 == "Ticker 8" 
+    input_1 := t8 
+    ticker_input := ticker8
+if eq1 == "Ticker 9" 
+    input_1 := t9 
+    ticker_input := ticker9 
+if eq1 == "Ticker 10" 
+    input_1 := t10 
+    ticker_input := ticker10 
+
+if eq2 == "Ticker 1" 
+    input_2 := t1 
+    ticker_output := ticker1 
+if eq2 == "Ticker 2" 
+    input_2 := t2 
+    ticker_output := ticker2 
+if eq2 == "Ticker 3" 
+    input_2 := t3 
+    ticker_output := ticker3 
+if eq2 == "Ticker 4" 
+    input_2 := t4
+    ticker_output := ticker4 
+if eq2 == "Ticker 5" 
+    input_2 := t5 
+    ticker_output := ticker5 
+if eq2 == "Ticker 6" 
+    input_2 := t6 
+    ticker_output := ticker6 
+if eq2 == "Ticker 7" 
+    input_2 := t7 
+    ticker_output := ticker7 
+if eq2 == "Ticker 8" 
+    input_2 := t8 
+    ticker_output := ticker8 
+if eq2 == "Ticker 9" 
+    input_2 := t9 
+    ticker_output := ticker9 
+if eq2 == "Ticker 10" 
+    input_2 := t10 
+    ticker_output := ticker10 
+
+
+f_regression(float independent, float dependent, int len, float variable) =>
+    float slope = 0.0 
+    float abc1 = 0.0 
+    float result = 0.0 
+	y_array = array.new_float() 
+	y_sq_array = array.new_float() 
+	x_array = array.new_float() 
+	x_sq_array = array.new_float() 
+	xy_array = array.new_float() 
+
+	// Loop functions
+	for i = 0 to len
+		array.push(y_array, dependent[i])
+		array.push(y_sq_array, dependent[i] * dependent[i]) 
+		array.push(x_array, independent[i])
+		array.push(x_sq_array, independent[i] * independent[i]) 
+		array.push(xy_array, independent[i] * dependent[i])
+	
+	// Regression Calculations 
+	y = array.sum(y_array)
+	y2 = array.sum(y_sq_array) 
+	x = array.sum(x_array) 
+	x2 = array.sum(x_sq_array)
+	xy = array.sum(xy_array) 
+
+	b1 = xy - (x * y) / len 
+	bbb2 = x2 - (math.pow(x, 2) / len) 
+	slope := (b1 / bbb2) 
+
+	abc = y - (slope * x) 
+	abc1 := abc / len 
+
+	result := (variable * slope) + abc1 
+    [slope, abc1, result]
+
+// Standard error 
+f_standard_error(float result, float dependent, int len) =>
+	se_residuals = array.new_float() 
+	for i = 0 to len 
+		array.push(se_residuals, (result[i] - dependent[i]) * (result[i] - dependent[i]))
+	
+	se_add = array.sum(se_residuals) 
+
+	r1 = se_add / (len - 2) 
+	se= math.sqrt(r1) 
+
+[o_slope, o_intercept, o_result] = f_regression(input_2, input_1, corlen, input_2)
+output_se = f_standard_error(o_result, input_1, corlen) 
+
+var table outputtable = table.new(position.bottom_center, 2, 4, bgcolor = black, frame_color = white, frame_width = 1) 
+
+if o_result > 0 
+    table.cell(outputtable, 1, 1, text = "Convert " + str.tostring(ticker_output) + " to " + str.tostring(ticker_input), bgcolor = black, text_color = white)
+    table.cell(outputtable, 1, 2, text = "y = " + str.tostring(math.round(o_slope,3)) + "x" + " + " + str.tostring(math.round(o_intercept,3)), bgcolor = black, text_color = white)
+    table.cell(outputtable, 1, 3, text = "+/- " + str.tostring(math.round(output_se,2)), bgcolor = black, text_color = white) 
+

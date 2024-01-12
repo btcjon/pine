@@ -1,0 +1,438 @@
+// About ATREE //////////
+// ATREE stands for Advanced Technical Range and Expectancy Estimator. It uses general momentum based technical indicators to attempt to predict likely sentiment and likely price targets. 
+//The indicators used are RSI, Stochastics, MFI and Z-Score. All, except Z-Score, are based on momentum and can provideinsights into what bias is best adopted. Z-Score is included as a neutral "tie breaker", as it is independent of momentum and can also provide reliable insights into potential sentiments and reversals. 
+
+// Backtest Functions //////////
+// The indicator will back-test itself over the previous 100 candles. Included in the backtest results are a backtest of
+//its accuracy to predict the correct sentiment, as well as its accuracy in predicted the correct price targets. 
+//  These are displayed in separate boxes and can be toggled on or off. 
+
+// Showing Current Technicals //////////
+// You have the ability to have the indicator show the current technicals. If you want to use this in place of a momentum based oscilator, you can toggle on the Show Technicals to view the current underlying technicals. The default setting is on. 
+// Anchor Points ////////// 
+// Anchor points determine which candle the probability assessment and price targets are going to be anchored from. If you are using this in lieu of an oscillator to trade in real time, it is important to anchor your assessment to the previous candle. This will display the data for the current candle you are on. If you anchor from current andle, the data will constantly update until the current candle closes. Anchoring from current candle should only  be done for daily outlooks when the day has closed off. 
+// © Steversteves
+
+//@version=5
+indicator("Advanced Technical Range and Expectancy Estimator [SS]", shorttitle = "ATREE [SS]", max_bars_back = 5000)
+// Groups //                                                // Tooltips 
+g1 = "Settings",            g6 = "RSI",                     t1 = "Determines the Anchoring point of the probability assessment. If you are using the indicator in real time \n suggest anchoring from previous candle."      
+g2 = "Backtest",            g7 = "MFI",                     t2 = "Threshold parameter for technical lookback, suggested input is 0.5 or lower"  
+g3 = "Display Settings",    g8 = "Stochastics",             t3 = "Threshold parameter for Z-Score, Suggested input is 0.05 or lower" 
+g4 = "Tolerance Levels",    g9 = "Z-Score",                 t4 = "Toggling this option on will keep the values in the primary chart a single colour. Else, with it off, the \n primary chart will change colours based on the backtest results \n with green being accurate results, orange being mildly accurate and red being inaccurate." 
+g5 = "Technicals" 
+
+train_time =    input.int(500, "Training Time", group = g1)
+timeframe =     input.timeframe("", "Timeframe", group = g1)
+anchor =        input.string("Previous Candle", "Anchor From", ["Previous Candle", "Current Candle"], tooltip = t1, group = g1)
+thresh =        input.float(0.5, "Technical Threshold", tooltip = t2, group = g4) 
+zthresh =       input.float(0.05, "Z-Score Threshold", tooltip = t3, group = g4) 
+bt_prices =     input.bool(true, "Show Price Backtest Results", group = g2)
+bt_ranges =     input.bool(true, "Show Backtests for Bullish/Bearsih Determination", group = g2)
+stat_col =      input.bool(false, "Keep Static Colour on Table", tooltip = t4, group = g3)
+show_tech =     input.bool(true, "Show Technicals", group = g5)
+
+// Technicals 
+// RSI                                                                  // MFI                                                                  // Stochastics 
+rsi_src =       input.source(close, "RSI Source", group = g6),          mfi_src =       input.source(hlc3, "MFI Source", group = g7),           sto_src =       input.source(close, "Stochastics Source", group = g8)  
+rsi_len =       input.int(14, "RSI Length", group = g6),                mfi_len =       input.int(14, "MFI Length", group = g7),                sto_len =       input.int(14, "Stochastics Length", group = g8)
+
+// Z Score 
+z_src =         input.source(close, "Z-Source", group = g9)
+z_len =         input.int(14, "Z-Score Length", group = g9)
+
+// Functions 
+sc(variable) => 
+    request.security(syminfo.tickerid, timeframe, variable)
+ar_f() => 
+    array.new<float>() 
+ar_i() =>
+    array.new<int>() 
+
+push(array, variable) =>
+    array.push(array, variable) 
+
+perc(pass, fail) => 
+    pass / (pass + fail) * 100 
+
+textcolor(pass, fail, perc) => 
+    color green = color.lime 
+    color red = color.red 
+    color text_col = na 
+    if stat_col
+        text_col := color.white 
+    else if perc >= 60 
+        text_col := green 
+    else if perc < 60 and perc >= 50 
+        text_col := color.yellow
+    else if perc < 50 and pass > fail 
+        text_col := color.yellow
+    else if fail > pass and perc < 50 
+        text_col := red 
+    else 
+        text_col := color.white 
+efficacy(current, max, min) => 
+    color text_coll = na 
+    if current == max 
+        text_coll := color.lime 
+    else if current == min 
+        text_coll := color.red 
+    else 
+        text_coll := color.white 
+sent(bull_c, bear_c) => 
+    string result = na 
+    if bull_c > bear_c 
+        result := "Bullish" 
+    else if bear_c > bull_c 
+        result := "Bearish" 
+    else 
+        result := "Mixed"
+sen_col(bull_c, bear_c) => 
+    color result = na 
+    if bull_c > bear_c 
+        result := color.lime 
+    else if bear_c > bull_c 
+        result := color.red 
+    else 
+        result := color.yellow 
+
+// Pull required Data from Ticker 
+
+float mfi = 0.0,        float lo_rng = 0.0  
+float stoch = 0.0,      float hi_target_price = 0.0 
+float rsi = 0.0,        float lo_target_price = 0.0 
+float z = 0.0,          float cur_close = 0.0 
+float hi_rng = 0.0,     float hi_of_day = 0.0,          float lo_of_day = 0.0,      bool bullish = na,      bool bearish = na  
+
+if anchor == "Previous Candle" 
+    mfi := sc(ta.mfi(mfi_src[1], mfi_len))
+    stoch := sc(ta.stoch(sto_src[1], high[1], low[1], sto_len)) 
+    rsi := sc(ta.rsi(rsi_src[1], rsi_len))
+    z := sc((z_src[1] - ta.sma(z_src[1], z_len)) / ta.stdev(z_src[1],z_len))
+    hi_rng := sc(high[1] - open[1]),                                   hi_of_day := sc(high[1])  
+    lo_rng := sc(open[1] - low[1]),                                    lo_of_day := sc(low) 
+    hi_target_price := sc(high[1] - close[2]),                         lo_target_price := sc(close[1] - low[2])
+    cur_close := sc(close[1]) 
+    bullish := sc(high[1] - open[1] > open[1] - low[1]),                bearish := sc (open[1] - low[1] > high[1] - open[1])   
+
+
+
+else if anchor == "Current Candle" 
+    mfi := sc(ta.mfi(mfi_src, mfi_len))
+    stoch := sc(ta.stoch(sto_src, high, low, sto_len)) 
+    rsi := sc(ta.rsi(rsi_src, rsi_len))
+    z := sc((z_src - ta.sma(z_src, z_len)) / ta.stdev(z_src,z_len))
+    hi_rng := sc(high - open),                                   hi_of_day := sc(high)  
+    lo_rng := sc(open - low),                                    lo_of_day := sc(low) 
+    hi_target_price := sc(high - close[1]),                      lo_target_price := sc(close[1] - low)
+    cur_close := sc(close) 
+    bullish := sc(high - open > open - low),                    bearish := sc (open - low > high - open)  
+
+
+// Technicals 
+
+prev_mfi = mfi[1]
+prev_sto = stoch[1]
+prev_rsi = rsi[1]
+prev_z = z[1]
+
+// Les Coloures 
+color black = color.rgb(0,0,0) 
+color white = color.white 
+color mauve = color.new(color.rgb(51, 6, 59), 55)
+color gray = color.new(color.gray, 75)
+
+
+cur_mfi = ar_f(),       mfi_hx = ar_f(),        hi_tgt = ar_f(),            lo_tgt = ar_f(),            bullish_arr = ar_i(),        bearish_arr = ar_i()  
+cur_rsi = ar_f(),       rsi_hx = ar_f(),             
+cur_sto = ar_f(),       sto_hx = ar_f(),        
+cur_z = ar_f(),         z_hx = ar_f(),          
+
+for i = 0 to 1 
+    array.push(cur_mfi, mfi[i])
+    push(cur_rsi, rsi[i])
+    push(cur_sto, stoch[i])
+    push(cur_z, z[i])
+int bullish_count = 0 
+int bearish_count = 0 
+for i = 0 to train_time
+    push(mfi_hx, prev_mfi[i])
+    push(rsi_hx, prev_rsi[i])
+    push(sto_hx, prev_sto[i])
+    push(z_hx, prev_z[i])
+    push(hi_tgt, hi_target_price[i])
+    push(lo_tgt, lo_target_price[i])
+    if bullish[i]
+        push(bullish_arr, bullish_count + 1)
+        push(bearish_arr, bearish_count + 0)
+    else if bearish[i]
+        push(bearish_arr, bearish_count + 1)
+        push(bullish_arr, bullish_count + 0) 
+    else 
+        push(bearish_arr, bearish_count + 0)
+        push(bullish_arr, bullish_count + 0) 
+
+now_rsi = array.get(cur_rsi, 0) 
+now_mfi = array.get(cur_mfi, 0) 
+now_sto = array.get(cur_sto, 0) 
+now_z = array.get(cur_z, 0) 
+
+
+// MFI 
+int bullish_instances_mfi = 0 
+int bearish_instances_mfi = 0 
+int mif_instances = 0 
+float mfi_hi_target = 0.0 
+float mfi_lo_target = 0.0 
+
+
+if array.size(mfi_hx) > 0 
+    for i = 0 to array.size(mfi_hx) - 1 
+        if array.get(mfi_hx, i) >= now_mfi- thresh and array.get(mfi_hx, i) <= now_mfi + thresh 
+            mif_instances += 1 
+            bullish_instances_mfi += array.get(bullish_arr, i)
+            bearish_instances_mfi += array.get(bearish_arr, i)
+            mfi_hi_target += array.get(hi_tgt, i)
+            mfi_lo_target += array.get(lo_tgt, i)
+    
+hi_target_from_mfi = cur_close +  (mfi_hi_target / mif_instances) 
+lo_target_from_mfi = cur_close - (mfi_lo_target / mif_instances)
+bool mfi_pass = bullish_instances_mfi > bearish_instances_mfi and bullish or bearish_instances_mfi > bullish_instances_mfi and bearish 
+bool mfi_fail = bullish_instances_mfi > bearish_instances_mfi and bearish or bearish_instances_mfi > bullish_instances_mfi and bullish 
+bool mfi_hi_pass = hi_of_day >= hi_target_from_mfi 
+bool mfi_lo_pass = lo_of_day <= lo_target_from_mfi 
+
+
+int mfi_hi_pass_c = 0 
+int mfi_lo_pass_c = 0 
+int mfi_tgt_na = 0 
+int mfi_pass_c = 0 
+int mfi_fail_c = 0 
+for i = 0 to 100 
+    if mfi_pass[i] 
+        mfi_pass_c += 1 
+    else if mfi_fail[i] 
+        mfi_fail_c += 1 
+    else 
+        na 
+if bt_prices 
+    for i = 0 to 100 
+        if mfi_hi_pass[i]
+            mfi_hi_pass_c += 1 
+        else if mfi_lo_pass[i]
+            mfi_lo_pass_c += 1
+        else 
+            mfi_tgt_na += 1 
+        
+mfi_perc = perc(mfi_pass_c, mfi_fail_c) 
+mfi_hi_perc = (mfi_hi_pass_c / (100 - mfi_tgt_na)) * 100 
+mfi_lo_perc = (mfi_lo_pass_c / (100 - mfi_tgt_na)) * 100 
+
+mfi_price_ef = math.avg(mfi_hi_perc, mfi_lo_perc) 
+// RSI 
+int bullish_instances_rsi = 0 
+int bearish_instances_rsi = 0 
+int rsi_instances = 0 
+float rsi_hi_target = 0.0 
+float rsi_lo_target = 0.0 
+if array.size(rsi_hx) > 0
+    for i = 0 to array.size(rsi_hx) - 1 
+        if array.get(rsi_hx, i) >= now_rsi - thresh and array.get(rsi_hx, i) <= now_rsi + thresh 
+            rsi_instances += 1 
+            bullish_instances_rsi += array.get(bullish_arr, i)
+            bearish_instances_rsi += array.get(bearish_arr, i)
+            rsi_hi_target += array.get(hi_tgt, i)
+            rsi_lo_target += array.get(lo_tgt, i)
+
+hi_target_from_rsi = cur_close +  (rsi_hi_target / rsi_instances) 
+lo_target_from_rsi = cur_close - (rsi_lo_target / rsi_instances)
+bool rsi_pass = bullish_instances_rsi > bearish_instances_rsi and bullish or bearish_instances_rsi > bullish_instances_rsi and bullish 
+bool rsi_fail = bullish_instances_rsi > bearish_instances_rsi and bearish or bearish_instances_rsi > bullish_instances_rsi and bullish
+bool rsi_hi_pass = hi_of_day >= hi_target_from_rsi[1]
+bool rsi_lo_pass = lo_of_day <= lo_target_from_rsi[1]
+
+int rsi_pass_c = 0 
+int rsi_fail_c = 0 
+int rsi_hi_pass_c = 0 
+int rsi_lo_pass_c = 0 
+int rsi_tgt_na = 0 
+
+if bt_ranges
+    for i = 0 to 100 
+        if rsi_pass[i] 
+            rsi_pass_c += 1 
+        else if rsi_fail[i] 
+            rsi_fail_c += 1 
+        else 
+            na 
+if bt_prices 
+    for i = 0 to 100 
+        if rsi_hi_pass[i]
+            rsi_hi_pass_c += 1 
+        else if rsi_lo_pass[i]
+            rsi_lo_pass_c += 1 
+        else 
+            rsi_tgt_na += 1 
+
+rsi_perc = perc(rsi_pass_c, rsi_fail_c) 
+rsi_hi_perc = (rsi_hi_pass_c / (100 - rsi_tgt_na)) * 100 
+rsi_lo_perc = (rsi_lo_pass_c / (100 - rsi_tgt_na)) * 100 
+rsi_price_ef = math.avg(rsi_hi_perc, rsi_lo_perc) 
+// sto 
+int bullish_instances_sto = 0 
+int bearish_instances_sto = 0 
+int sto_instances = 0 
+float sto_hi_target = 0.0 
+float sto_lo_target = 0.0 
+if array.size(sto_hx) > 0
+    for i = 0 to array.size(sto_hx) - 1 
+        if array.get(sto_hx, i) >= now_sto - thresh and array.get(sto_hx, i) <= now_sto + thresh 
+            sto_instances += 1 
+            bullish_instances_sto += array.get(bullish_arr, i)
+            bearish_instances_sto += array.get(bearish_arr, i)
+            sto_hi_target += array.get(hi_tgt, i)
+            sto_lo_target += array.get(lo_tgt, i)
+
+hi_target_from_sto = cur_close +  (sto_hi_target / sto_instances) 
+lo_target_from_sto = cur_close - (sto_lo_target / sto_instances)
+bool sto_pass = bullish_instances_sto > bearish_instances_sto and bullish or bearish_instances_sto > bullish_instances_sto and bullish 
+bool sto_fail = bullish_instances_sto > bearish_instances_sto and bearish or bearish_instances_sto > bullish_instances_sto and bullish
+bool sto_hi_pass = hi_of_day >= hi_target_from_sto[1]
+bool sto_lo_pass = lo_of_day <= lo_target_from_sto[1]
+
+int sto_hi_pass_c = 0 
+int sto_lo_pass_c = 0 
+int sto_tgt_na = 0 
+int sto_pass_c = 0 
+int sto_fail_c = 0 
+for i = 0 to 100 
+    if sto_pass[i] 
+        sto_pass_c += 1 
+    else if sto_fail[i] 
+        sto_fail_c += 1 
+    else 
+        na 
+if bt_prices 
+    for i = 0 to 100 
+        if sto_hi_pass[i]
+            sto_hi_pass_c += 1 
+        else if sto_lo_pass[i] 
+            sto_lo_pass_c += 1 
+        else 
+            sto_tgt_na += 1 
+
+sto_perc = perc(sto_pass_c, sto_fail_c)
+sto_hi_perc = (sto_hi_pass_c / (100 - sto_tgt_na)) * 100 
+sto_lo_perc = (sto_lo_pass_c / (100 - sto_tgt_na)) * 100 
+sto_price_ef = math.avg(sto_hi_perc, sto_lo_perc) 
+// z
+int bullish_instances_z = 0 
+int bearish_instances_z = 0 
+int z_instances = 0 
+float z_hi_target = 0.0 
+float z_lo_target = 0.0 
+if array.size(z_hx) > 0
+    for i = 0 to array.size(z_hx) - 1 
+        if array.get(z_hx, i) >= now_z - thresh and array.get(z_hx, i) <= now_z + thresh 
+            z_instances += 1 
+            bullish_instances_z += array.get(bullish_arr, i)
+            bearish_instances_z += array.get(bearish_arr, i)
+            z_hi_target += array.get(hi_tgt, i)
+            z_lo_target += array.get(lo_tgt, i)
+
+hi_target_from_z = cur_close +  (z_hi_target / z_instances) 
+lo_target_from_z = cur_close - (z_lo_target / z_instances)
+bool z_pass = bullish_instances_z > bearish_instances_z and bullish or bearish_instances_z > bullish_instances_z and bullish 
+bool z_fail = bullish_instances_z > bearish_instances_z and bearish or bearish_instances_z > bullish_instances_z and bullish
+bool z_hi_pass = hi_of_day >= hi_target_from_z[1] 
+bool z_lo_pass = lo_of_day <= lo_target_from_z[1]
+
+int z_pass_c = 0 
+int z_fail_c = 0
+int z_hi_pass_c = 0 
+int z_lo_pass_c = 0 
+int z_tgt_na = 0 
+
+if bt_ranges 
+    for i = 0 to 100 
+        if z_pass[i] 
+            z_pass_c += 1 
+        else if z_fail[i] 
+            z_fail_c += 1 
+        else 
+            na
+if bt_prices 
+    for i = 0 to 100 
+        if z_hi_pass[i]
+            z_hi_pass_c += 1 
+        else if z_lo_pass[i]
+            z_lo_pass_c += 1
+        else
+            z_tgt_na += 1 
+
+z_perc = perc(z_pass_c, z_fail_c) 
+z_hi_perc = (z_hi_pass_c / (100 - z_tgt_na)) * 100 
+z_lo_perc = (z_lo_pass_c / (100 - z_tgt_na)) * 100 
+z_price_ef = math.avg(z_hi_perc, z_lo_perc) 
+// Secondary Assessments 
+
+most_effective = math.max(z_perc, rsi_perc, mfi_perc, sto_perc)
+least_effective = math.min(z_perc, rsi_perc, mfi_perc, sto_perc)
+best_target = math.max(mfi_price_ef, rsi_price_ef, sto_price_ef, z_price_ef) 
+worst_target = math.min(mfi_price_ef, rsi_price_ef, sto_price_ef, z_price_ef) 
+if bt_ranges
+    var table demo = table.new(position.middle_right, 2, 6, bgcolor = black, frame_color = white, frame_width = 3)  
+    table.cell(demo, 1, 0, text = " Sentiment Backtest Results over \n Previous 100 Candles", bgcolor =gray, text_color = color.white)
+    table.cell(demo, 1, 1, text = "RSI Pass to Fail Ratio \n" + str.tostring(rsi_pass_c) + " : " + str.tostring(rsi_fail_c) + "\n" + str.tostring(math.round(rsi_perc,2)) + "%", bgcolor = black, text_color = efficacy(rsi_perc, most_effective, least_effective))
+    table.cell(demo, 1, 2, text = "MFI Pass to Fail Ratio \n" + str.tostring(mfi_pass_c) + " : " + str.tostring(mfi_fail_c) + "\n" + str.tostring(math.round(mfi_perc,2)) + "%", bgcolor = black, text_color = efficacy(mfi_perc, most_effective, least_effective))
+    table.cell(demo, 1, 3, text = "Stoch Pass to Fail Ratio \n" + str.tostring(sto_pass_c) + " : " + str.tostring(sto_fail_c) + "\n" + str.tostring(math.round(sto_perc,2)) + "%", bgcolor = black, text_color = efficacy(sto_perc, most_effective, least_effective))
+    table.cell(demo, 1, 4, text = "Z Pass to Fail Ratio \n" + str.tostring(z_pass_c) + " : " + str.tostring(z_fail_c) + "\n " + str.tostring(math.round(z_perc,2)) + "%", bgcolor = black, text_color = efficacy(z_perc, most_effective, least_effective))
+
+if bt_prices 
+    var table tps = table.new(position.middle_left, 2, 6, bgcolor = black, frame_color = white, frame_width = 3)  
+    table.cell(tps, 1, 0, text = " Price Backtest Results over \n Previous 100 Candles", bgcolor =gray, text_color = color.white)
+    table.cell(tps,1, 4, text = "Z High Pass: " + str.tostring(math.round(z_hi_perc,2)) + "%" + "\n Z Low Pass: " + str.tostring(math.round(z_lo_perc, 2)) + "%", bgcolor = black, text_color = efficacy(z_price_ef, best_target, worst_target))
+    table.cell(tps,1, 3, text = "Sto High Pass: " + str.tostring(math.round(sto_hi_perc,2)) + "%" + "\n Sto Low Pass: " + str.tostring(math.round(sto_lo_perc, 2)) + "%", bgcolor = black, text_color = efficacy(sto_price_ef, best_target, worst_target))
+    table.cell(tps,1, 1, text = "RSI High Pass: " + str.tostring(math.round(rsi_hi_perc,2)) + "%" + "\n RSI Low Pass: " + str.tostring(math.round(rsi_lo_perc, 2)) + "%", bgcolor = black, text_color = efficacy(rsi_price_ef, best_target, worst_target))
+    table.cell(tps,1, 2, text = "MFI High Pass: " + str.tostring(math.round(mfi_hi_perc,2)) + "%" + "\n MFI Low Pass: " + str.tostring(math.round(mfi_lo_perc, 2)) + "%", bgcolor = black, text_color =efficacy(mfi_price_ef, best_target, worst_target))
+// Assessment Table 
+
+var table results = table.new(position.middle_center, 9, 10, bgcolor = mauve, frame_color = black, frame_width = 3) 
+
+table.cell(results, 1, 1, text = "Technical", bgcolor = mauve, text_color = white) 
+table.cell(results, 1, 2, text = "RSI", bgcolor = mauve, text_color = textcolor(rsi_pass_c, rsi_fail_c, rsi_perc)) 
+table.cell(results, 4, 2, text = str.tostring(math.round(hi_target_from_rsi,2)), bgcolor = mauve, text_color = textcolor(rsi_pass_c, rsi_fail_c, rsi_perc)) 
+table.cell(results, 5, 2, text = str.tostring(math.round(lo_target_from_rsi,2)), bgcolor = mauve, text_color = textcolor(rsi_pass_c, rsi_fail_c, rsi_perc)) 
+table.cell(results, 1, 3, text = "MFI", bgcolor = mauve, text_color = textcolor(mfi_pass_c, mfi_fail_c, mfi_perc)) 
+table.cell(results, 2, 3, text = str.tostring(bullish_instances_mfi), bgcolor = mauve, text_color = textcolor(mfi_pass_c, mfi_fail_c, mfi_perc)) 
+table.cell(results, 3, 3, text = str.tostring(bearish_instances_mfi), bgcolor = mauve, text_color = textcolor(mfi_pass_c, mfi_fail_c, mfi_perc)) 
+table.cell(results, 4, 3, text = str.tostring(math.round(hi_target_from_mfi,2)), bgcolor = mauve, text_color = textcolor(mfi_pass_c, mfi_fail_c, mfi_perc)) 
+table.cell(results, 5, 3, text = str.tostring(math.round(lo_target_from_mfi,2)), bgcolor = mauve, text_color = textcolor(mfi_pass_c, mfi_fail_c, mfi_perc)) 
+table.cell(results, 1, 4, text = "Stochastics", bgcolor = mauve, text_color = textcolor(sto_pass_c, sto_fail_c, sto_perc) ) 
+table.cell(results, 2, 4, text = str.tostring(bullish_instances_sto), bgcolor = mauve, text_color = textcolor(sto_pass_c, sto_fail_c, sto_perc)) 
+table.cell(results, 3, 4, text = str.tostring(bearish_instances_sto), bgcolor = mauve, text_color = textcolor(sto_pass_c, sto_fail_c, sto_perc) ) 
+table.cell(results, 4, 4, text = str.tostring(math.round(hi_target_from_sto,2)), bgcolor = mauve, text_color = textcolor(sto_pass_c, sto_fail_c, sto_perc) ) 
+table.cell(results, 5, 4, text = str.tostring(math.round(lo_target_from_sto,2)), bgcolor = mauve, text_color = textcolor(sto_pass_c, sto_fail_c, sto_perc) ) 
+table.cell(results, 1, 5, text = "Z-Score", bgcolor = mauve, text_color = textcolor(z_pass_c, z_fail_c, z_perc)) 
+table.cell(results, 2, 5, text = str.tostring(bullish_instances_z), bgcolor = mauve, text_color = textcolor(z_pass_c, z_fail_c, z_perc)) 
+table.cell(results, 3, 5, text = str.tostring(bearish_instances_z), bgcolor = mauve, text_color = textcolor(z_pass_c, z_fail_c, z_perc)) 
+table.cell(results, 2, 2, text = str.tostring(bullish_instances_rsi), bgcolor = mauve, text_color = textcolor(rsi_pass_c, rsi_fail_c, rsi_perc)) 
+table.cell(results, 3, 2, text = str.tostring(bearish_instances_rsi), bgcolor = mauve, text_color = textcolor(rsi_pass_c, rsi_fail_c, rsi_perc)) 
+table.cell(results, 4, 5, text = str.tostring(math.round(hi_target_from_z,2)), bgcolor = mauve, text_color = textcolor(z_pass_c, z_fail_c, z_perc)) 
+table.cell(results, 5, 5, text = str.tostring(math.round(lo_target_from_z,2)), bgcolor = mauve, text_color = textcolor(z_pass_c, z_fail_c, z_perc)) 
+table.cell(results, 2, 1, text = "Bullish Count", bgcolor = mauve, text_color = white) 
+table.cell(results, 3, 1, text = "Bearish Count", bgcolor = mauve, text_color = white) 
+table.cell(results, 4, 1, text = "Bullish Target Price", bgcolor = mauve, text_color = white) 
+table.cell(results, 5, 1, text = "Bearish Target Price", bgcolor = mauve, text_color = white) 
+table.cell(results, 6, 1, text = "Sentiment", bgcolor = mauve, text_color = white) 
+table.cell(results, 6, 2, text = str.tostring(sent(bullish_instances_rsi, bearish_instances_rsi)), bgcolor = mauve, text_color = sen_col(bullish_instances_rsi, bearish_instances_rsi))
+table.cell(results, 6, 3, text = str.tostring(sent(bullish_instances_mfi, bearish_instances_mfi)), bgcolor = mauve, text_color = sen_col(bullish_instances_mfi, bearish_instances_mfi))
+table.cell(results, 6, 4, text = str.tostring(sent(bullish_instances_sto, bearish_instances_sto)), bgcolor = mauve, text_color = sen_col(bullish_instances_sto, bearish_instances_sto))
+table.cell(results, 6, 5, text = str.tostring(sent(bullish_instances_z, bearish_instances_z)), bgcolor = mauve, text_color = sen_col(bullish_instances_z, bearish_instances_z))
+
+if show_tech 
+    table.cell(results, 7, 1, text = "Current Technical", bgcolor = mauve, text_color = white) 
+    table.cell(results, 7, 2, text = str.tostring(math.round(now_rsi,2)), bgcolor = mauve, text_color = textcolor(rsi_pass_c, rsi_fail_c, rsi_perc))
+    table.cell(results, 7, 3, text = str.tostring(math.round(now_mfi,2)), bgcolor = mauve, text_color = textcolor(mfi_pass_c, mfi_fail_c, mfi_perc))
+    table.cell(results, 7, 4, text = str.tostring(math.round(now_sto,2)), bgcolor = mauve, text_color = textcolor(sto_pass_c, sto_fail_c, sto_perc) )  
+    table.cell(results, 7, 5, text = str.tostring(math.round(now_z,2)), bgcolor = mauve, text_color = textcolor(z_pass_c, z_fail_c, z_perc))  
