@@ -66,6 +66,7 @@ ATRP_daily_factor = input.float(0.15, title='ATRP Daily Factor', step=0.01)
 var trp = 0.0
 var atrps = 0.0
 var float atrp_daily = na
+var float max_atrp_SO_distance = input.float(3.5, title='Max ATRP SO Distance', step=0.1, minval=0.1)
 
 //True Range Percentage Calculation
 trp := ta.tr / hl2 * 100
@@ -266,20 +267,19 @@ if strategy.position_size == 0
 
 
 //Safety order (SO) levels
-if strategy.position_size > 0 and i == 0
-    if safe_order_step_scale == 1.0
-        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
-        threshold
-    else
-        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
-        threshold
-else if strategy.position_size < 0 and i == 0
-    if safe_S_order_step_scale == 1.0
-        S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
-        S_threshold
-    else
-        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
-        S_threshold
+// Calculate SO distances based on ATRP
+float[] SO_distances = array.new_float(max_safe_order)
+float[] S_SO_distances = array.new_float(max_S_safe_order)
+if strategy.position_size != 0
+    atrp_distance = atrp_daily * max_atrp_SO_distance
+    for j = 1 to max_safe_order
+        float SO_distance = initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2)))
+        array.set(SO_distances, j - 1, SO_distance)
+    for j = 1 to max_S_safe_order
+        float S_SO_distance = initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2)))
+        array.set(S_SO_distances, j - 1, S_SO_distance)
+    threshold := array.get(SO_distances, current_so - 1)
+    S_threshold := array.get(S_SO_distances, current_so - 1)
 
 
 
@@ -303,14 +303,7 @@ short_SO_triggervalue = input(title='Short trigger value', defval=-1, group = gr
 
 
 // Average Down (safety orders) for longs
-if current_so > 0 and
-   i == 0 and 
-   strategy.position_size > 0 and 
-   low <= threshold and
-   not no_trade_time and
-   (use_SO_filters_long ? SO_filter_input_long == SO_filter_value_long and current_so > min_SO_for_filter_long : true) and
-   (use_SO_trigger_long ? SO_trigger_input_long == SO_triggervalue_long and current_so > min_SO_for_trigger_long : true) and
-   current_so <= max_safe_order
+if current_so > 0 and strategy.position_size > 0 and low <= threshold and not no_trade_time and current_so <= max_safe_order
     // Calculate the order size in units, considering the number of lots and the scaling factor
     order_size_units = safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1) * 100000
     _string_long_so = ""
@@ -329,12 +322,7 @@ if current_so > 0 and
 order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
 
 // Short Average Up (safety orders) for shorts
-if current_so > 0 and 
-   i == 0 and 
-   strategy.position_size < 0 and 
-   high >= S_threshold and
-   not no_trade_time and 
-   current_so <= max_S_safe_order
+if current_so > 0 and strategy.position_size < 0 and high >= S_threshold and not no_trade_time and current_so <= max_S_safe_order
     // Calculate the order size in units, considering the number of lots and the scaling factor
     order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
     
