@@ -271,17 +271,19 @@ if strategy.position_size > 0 and i == 0
     atrp_distance = atrp_daily * max_atrp_SO_distance
     for j = 1 to max_safe_order
         if j == 1
-            SO_distance[j] = initial_order - initial_order * price_deviation
+            array.set(SO_distance, j, initial_order - initial_order * price_deviation)
         else
-            SO_distance[j] = initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2)))
+            array.set(SO_distance, j, initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2))))
+    threshold := array.get(SO_distance, current_so)
     threshold := SO_distance[current_so]
 else if strategy.position_size < 0 and i == 0
     atrp_distance = atrp_daily * max_atrp_SO_distance
     for j = 1 to max_S_safe_order
         if j == 1
-            S_SO_distance[j] = initial_S_order * (1 + price_S_deviation)
+            array.set(S_SO_distance, j, initial_S_order * (1 + price_S_deviation))
         else
-            S_SO_distance[j] = initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2)))
+            array.set(S_SO_distance, j, initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2))))
+    S_threshold := array.get(S_SO_distance, current_so)
     S_threshold := S_SO_distance[current_so]
 
 
