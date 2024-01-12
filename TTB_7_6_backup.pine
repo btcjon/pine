@@ -280,18 +280,20 @@ if strategy.position_size == 0
 
 //Safety order (SO) levels
 if strategy.position_size > 0 and i == 0
+    atrp_price_deviation = atrp_daily * max_atrp_SO_distance / max_safe_order
     if safe_order_step_scale == 1.0
-        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
+        threshold := initial_order - atrp_price_deviation * current_so
         threshold
     else
-        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
+        threshold := initial_order - atrp_price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1)
         threshold
 else if strategy.position_size < 0 and i == 0
+    atrp_price_S_deviation = atrp_daily * max_atrp_SO_distance / max_S_safe_order
     if safe_S_order_step_scale == 1.0
-        S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
+        S_threshold := initial_S_order + atrp_price_S_deviation * current_so
         S_threshold
     else
-        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
+        S_threshold := initial_S_order + atrp_price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1)
         S_threshold
 
 
