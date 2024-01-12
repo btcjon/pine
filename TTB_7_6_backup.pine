@@ -463,7 +463,7 @@ if high > price_pump and window and strategy.position_size < 0
     price_change_percentage = ((price_pump - initial_S_price) / initial_S_price) * 100
     max_pump_atrp_temp = price_change_percentage / atrp_daily
     max_pump_atrp := max(max_pump_atrp, max_pump_atrp_temp)
-    if price_change_percentage > max_pump
+    if max_pump < price_change_percentage
         max_pump := price_change_percentage
         pump_date := dayofmonth(time)
         pump_month := month(time)
