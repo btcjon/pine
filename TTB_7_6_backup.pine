@@ -268,23 +268,23 @@ if strategy.position_size == 0
     S_threshold
 
 //Safety order (SO) levels
-if strategy.position_size > 0 and current_so <= max_safe_order and current_so > 0
+if strategy.position_size > 0 and current_so < max_safe_order
     atrp_distance = atrp_daily * max_atrp_SO_distance
     for j = 1 to max_safe_order
         if j == 1
             array.set(SO_distance, j - 1, initial_order - initial_order * price_deviation)
         else
             array.set(SO_distance, j - 1, initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2))))
-    threshold := array.get(SO_distance, math.max(current_so - 1, 0))
+    threshold := array.get(SO_distance, current_so)
     log.info("Threshold: {0}", threshold)
-else if strategy.position_size < 0 and current_so <= max_S_safe_order and current_so > 0
+else if strategy.position_size < 0 and current_so < max_S_safe_order
     atrp_distance = atrp_daily * max_atrp_SO_distance
     for j = 1 to max_S_safe_order
         if j == 1
             array.set(S_SO_distance, j - 1, initial_S_order * (1 + price_S_deviation))
         else
             array.set(S_SO_distance, j - 1, initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2))))
-    S_threshold := array.get(S_SO_distance, math.max(current_so - 1, 0))
+    S_threshold := array.get(S_SO_distance, current_so)
     log.info("S_threshold: {0}", S_threshold)
 
 // //Safety order (SO) levels
@@ -389,10 +389,9 @@ if current_so > 0 and
 
 
 // Take Profit! 
-if i == 1
+if strategy.position_size != 0 and ((strategy.position_size > 0 and high >= take_profit_level) or (strategy.position_size < 0 and low <= take_S_profit_level))
     strategy.close_all()
-    i := 0
-    i
+    log.info("Take Profit executed at price: {0}", close)
 
 // take profit long
 if take_profit_level <= high and strategy.position_size > 0 and
