@@ -268,15 +268,19 @@ if strategy.position_size == 0
 
 // //Safety order (SO) levels
 // if strategy.position_size > 0 and i == 0
-//     atrp_distance = atrp_daily * max_atrp_SO_distance
-//     so_increment = atrp_distance / max_safe_order
-//     threshold := initial_order - so_increment * current_so
-//     threshold
+//     if safe_order_step_scale == 1.0
+//         threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
+//         threshold
+//     else
+//         threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
+//         threshold
 // else if strategy.position_size < 0 and i == 0
-//     atrp_distance = atrp_daily * max_atrp_SO_distance
-//     so_increment = atrp_distance / max_S_safe_order
-//     S_threshold := initial_S_order + so_increment * current_so
-//     S_threshold
+//     if safe_S_order_step_scale == 1.0
+//         S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
+//         S_threshold
+//     else
+//         S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
+//         S_threshold
 
 //Safety order (SO) levels
 if strategy.position_size > 0 and i == 0
@@ -287,6 +291,7 @@ if strategy.position_size > 0 and i == 0
     else
         threshold := initial_order - atrp_price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1)
         threshold
+        //log.info("Threshold: {0}", threshold)
 else if strategy.position_size < 0 and i == 0
     atrp_price_S_deviation = atrp_daily * max_atrp_SO_distance / max_S_safe_order
     if safe_S_order_step_scale == 1.0
@@ -295,7 +300,10 @@ else if strategy.position_size < 0 and i == 0
     else
         S_threshold := initial_S_order + atrp_price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1)
         S_threshold
+        //log.info("S Threshold: {0}", S_threshold)
 
+// log.info("Threshold: {0}", threshold)
+// log.info("S Threshold: {0}", s_threshold)
 
 groupTitleSOsLongConditions = "Long SO Conditions"
 //UseThreshold_long_SO = input.bool(false, "Use long SO Threshold", group = groupTitleSOsLongConditions)
