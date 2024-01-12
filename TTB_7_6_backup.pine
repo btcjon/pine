@@ -203,7 +203,7 @@ if math.abs(strategy.position_size) != 0 and current_so[1] == 0
 
 
 // long entry
-if long and 
+if long and window and not no_trade_time and
    strategy.position_size == 0 and 
    close > 0 and 
    window and
@@ -217,16 +217,15 @@ if long and
     else if webhookMessage == "pineconnector"
         _string_long := str.tostring(ID) + ',long,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '"'
     strategy.order(longId, strategy.long, qty=(base_order_lots * 100000), comment="#" + str.tostring(long_sequence_counter) + "L E " + str.tostring(close), alert_message=_string_long)
-    initial_order := close
-    current_so := 1
-    initial_price := close
-    price_drop := close
-    original_ttp_value := 0
-    firstBarTime := time
-    tradeCount += 1
-    avg_price := close
-    total_funds_in_trade := avg_price * base_order_lots * 100000
-    total_qty_in_trade := base_order_lots * 100000
+    initial_order := close // Entry price for the first order
+    current_so := 0 // Reset the safety order count
+    initial_price := close // Store the initial price for drop calculations
+    price_drop := close // Reset the price drop to the entry price
+    firstBarTime := time // Store the time of the first bar for this trade
+    tradeCount := tradeCount + 1 // Increment the trade count
+    avg_price := close // Set the average price to the entry price
+    total_funds_in_trade := base_order_lots * 100000 * close // Calculate the total funds in trade
+    total_qty_in_trade := base_order_lots * 100000 // Set the total quantity in trade
     //initial_atrp = atrps(close, atrp_length)
     total_qty_in_trade
     log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
@@ -269,7 +268,7 @@ if strategy.position_size == 0
     S_threshold
 
 //Safety order (SO) levels
-if strategy.position_size > 0 and i == 0
+if strategy.position_size > 0 and current_so < max_safe_order
     atrp_distance = atrp_daily * max_atrp_SO_distance
     for j = 1 to max_safe_order
         if j == 1
@@ -287,7 +286,7 @@ else if strategy.position_size < 0 and i == 0
     S_threshold := array.get(S_SO_distance, math.min(current_so - 1, array.size(S_SO_distance) - 1))
 
 // //Safety order (SO) levels
-// if strategy.position_size > 0 and i == 0
+// if strategy.position_size > 0 and current_so < max_safe_order
 //     if safe_order_step_scale == 1.0
 //         threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
 //         threshold
@@ -331,7 +330,7 @@ short_SO_triggervalue = input(title='Short trigger value', defval=-1, group = gr
 
 
 // Average Down (safety orders) for longs
-if current_so > 0 and
+if current_so >= 0 and
    i == 0 and 
    strategy.position_size > 0 and 
    low <= threshold and
@@ -349,11 +348,11 @@ if current_so > 0 and
     else if webhookMessage == "pineconnector"
         _string_long_so := str.tostring(ID) + ',long,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '"'
     strategy.order(longId, strategy.long, qty=(safe_order_lots * 100000) * math.pow(safe_order_volume_scale, current_so - 1), comment="#" + str.tostring(long_sequence_counter) + "L SO " + str.tostring(current_so) + '@' + str.tostring(close), alert_message=_string_long_so)
-    total_funds_in_trade += threshold * order_size_units
-    total_qty_in_trade += order_size_units
-    avg_price := total_funds_in_trade / total_qty_in_trade
-    current_so += 1
-    tradeCount += 1
+    total_funds_in_trade := total_funds_in_trade + (threshold * order_size_units) // Update the total funds in trade
+    total_qty_in_trade := total_qty_in_trade + order_size_units // Update the total quantity in trade
+    avg_price := total_funds_in_trade / total_qty_in_trade // Recalculate the average price
+    current_so := current_so + 1 // Increment the safety order count
+    tradeCount := tradeCount + 1 // Increment the trade count
     log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, str.tostring(strategy.position_size), (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
 
 order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
@@ -394,7 +393,7 @@ if i == 1
     i
 
 // take profit long
-if take_profit_level <= high and
+if take_profit_level <= high and strategy.position_size > 0 and not no_trade_time
    not no_trade_time and
    strategy.position_size > 0
     _string_close_long = ""
@@ -403,22 +402,19 @@ if take_profit_level <= high and
     else if webhookMessage == "pineconnector"
         _string_close_long := str.tostring(ID) + ',closelong,' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"'
     strategy.close(longId, comment="#" + str.tostring(long_sequence_counter) + "L Close @" + str.tostring(close), alert_message=_string_close_long)
-    soCount := current_so
-    current_so := 0
-    original_ttp_value := 0
-    price_drop := na
-    initial_price := na
-    diffDays := time - firstBarTime
-    if diffDays > maxDiffDays
-        maxDiffDays := diffDays
-        longest_trade_day := dayofmonth
-        longest_trade_month := month
-        longest_trade_month
-    i := 1
-    initial_order := 0.0
-    avg_price := na
-    capital *= (1 + total_qty_in_trade * take_profit / 100)
-    capital
+    soCount := current_so // Store the count of safety orders for this trade
+    current_so := 0 // Reset the safety order count
+    price_drop := na // Reset the price drop
+    initial_price := na // Reset the initial price
+    diffDays := time - firstBarTime // Calculate the duration of the trade
+    if diffDays > maxDiffDays // Check if this trade had the longest duration
+        maxDiffDays := diffDays // Update the maximum duration
+        longest_trade_day := dayofmonth(time) // Update the day of the longest trade
+        longest_trade_month := month(time) // Update the month of the longest trade
+    i := 1 // Set the flag to indicate the trade is closed
+    initial_order := na // Reset the initial order price
+    avg_price := na // Reset the average price
+    capital := capital + (total_qty_in_trade * take_profit) // Update the capital with the profit from the trade
     log.info("#{0} - L CLOSE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
 
 // take profit short 
