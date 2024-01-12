@@ -203,7 +203,7 @@ if math.abs(strategy.position_size) != 0 and current_so[1] == 0
 
 
 // long entry
-if long and window and not no_trade_time and
+if long and
    strategy.position_size == 0 and 
    close > 0 and 
    window and
@@ -228,7 +228,7 @@ if long and window and not no_trade_time and
     total_qty_in_trade := base_order_lots * 100000 // Set the total quantity in trade
     //initial_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
+    log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_profit_level)
 
 // short entry
 else if short and 
@@ -256,7 +256,7 @@ else if short and
     total_qty_in_trade := base_S_order_lots * 100000
     //initial_S_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_S_order_lots * 100000), safe_S_order_volume_scale, safe_S_order_step_scale, take_S_profit_level)
+    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level)
 longId = "Long" + str.tostring(long_sequence_counter)
 shortId = "Short" + str.tostring(short_sequence_counter)
 
@@ -276,6 +276,7 @@ if strategy.position_size > 0 and current_so < max_safe_order
         else
             array.set(SO_distance, j - 1, initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2))))
     threshold := array.get(SO_distance, math.min(current_so - 1, array.size(SO_distance) - 1))
+    log.info("Threshold: {0}", threshold)
 else if strategy.position_size < 0 and i == 0
     atrp_distance = atrp_daily * max_atrp_SO_distance
     for j = 1 to max_S_safe_order
@@ -284,6 +285,7 @@ else if strategy.position_size < 0 and i == 0
         else
             array.set(S_SO_distance, j - 1, initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2))))
     S_threshold := array.get(S_SO_distance, math.min(current_so - 1, array.size(S_SO_distance) - 1))
+    log.info("S_threshold: {0}", S_threshold)
 
 // //Safety order (SO) levels
 // if strategy.position_size > 0 and current_so < max_safe_order
@@ -393,7 +395,7 @@ if i == 1
     i
 
 // take profit long
-if take_profit_level <= high and strategy.position_size > 0 and not no_trade_time
+if take_profit_level <= high and strategy.position_size > 0 and
    not no_trade_time and
    strategy.position_size > 0
     _string_close_long = ""
