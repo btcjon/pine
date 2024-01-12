@@ -109,7 +109,7 @@ safe_order_step_scale = input.float(1.5, step=0.1, title='Safety order step scal
 max_safe_order = input(6, title='max no. of safe orders')
 price_S_deviation = input.float(0.06, title='Price deviation to open short safety orders (%)', step=0.1, minval=0.0) / 100
 // Input for maximum ATRP distance for the last SO
-max_atrp_SO_distance = input.float(1.0, title='Max ATRP distance for last SO', step=0.1)
+max_atrp_SO_distance = input.float(3.0, title='Max ATRP distance for last SO', step=0.1)
 //take_S_profit = input.float(0.09, title='Short Target Take Profit (%)', step=0.1, minval=0.0) / 100
 take_S_profit = atrp_target / 100
 base_S_order_lots = input.float(0.4, title='Base Sell Order Size (Lots)', step=0.01)
@@ -288,6 +288,22 @@ else if strategy.position_size < 0 and i == 0
     if current_so <= array.size(S_SO_distance)
         S_threshold := array.get(S_SO_distance, current_so - 1)
 
+// //Safety order (SO) levels
+// if strategy.position_size > 0 and i == 0
+//     if safe_order_step_scale == 1.0
+//         threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
+//         threshold
+//     else
+//         threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
+//         threshold
+// else if strategy.position_size < 0 and i == 0
+//     if safe_S_order_step_scale == 1.0
+//         S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
+//         S_threshold
+//     else
+//         S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
+//         S_threshold
+
 
 groupTitleSOsLongConditions = "Long SO Conditions"
 //UseThreshold_long_SO = input.bool(false, "Use long SO Threshold", group = groupTitleSOsLongConditions)
@@ -340,6 +356,8 @@ if current_so > 0 and
    strategy.position_size < 0 and 
    high >= S_threshold and
    not no_trade_time and 
+   (use_SO_filters_short ? SO_filter_input_short == SO_filter_value_short and current_so > min_SO_for_filter_short : true) and
+   (use_SO_trigger_short ? SO_trigger_input_short == SO_triggervalue_short and current_so > min_SO_for_trigger_short : true) and
    current_so <= max_S_safe_order
     // Calculate the order size in units, considering the number of lots and the scaling factor
     order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
