@@ -98,6 +98,7 @@ long_trigger = input(title='Long trigger value', defval=1)
 short_trigger = input(title='Short trigger value', defval=-1)
 trigger = input(title='Enter trigger', defval=close)
 price_deviation = input.float(0.06, title='Price deviation to open safety orders (%)', step=0.1, minval=0.0) / 100
+max_atrp_SO_distance = input.float(3.5, title='Max ATRP SO Distance', step=0.1, minval=0.1)
 //take_profit = input.float(0.09, title='Target Take Profit (%)', step=0.1, minval=0.0) / 100
 take_profit = atrp_target/ 100
 base_order_lots = input.float(0.4, title='Base Order Size (Lots)', step=0.01)
@@ -267,19 +268,15 @@ if strategy.position_size == 0
 
 //Safety order (SO) levels
 if strategy.position_size > 0 and i == 0
-    if safe_order_step_scale == 1.0
-        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
-        threshold
-    else
-        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
-        threshold
+    atrp_distance = atrp_daily * max_atrp_SO_distance
+    so_increment = atrp_distance / max_safe_order
+    threshold := initial_order - so_increment * current_so
+    threshold
 else if strategy.position_size < 0 and i == 0
-    if safe_S_order_step_scale == 1.0
-        S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
-        S_threshold
-    else
-        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
-        S_threshold
+    atrp_distance = atrp_daily * max_atrp_SO_distance
+    so_increment = atrp_distance / max_S_safe_order
+    S_threshold := initial_S_order + so_increment * current_so
+    S_threshold
 
 
 groupTitleSOsLongConditions = "Long SO Conditions"
@@ -530,5 +527,3 @@ if show_table
         tbb2.R(16).TextColor(tableText).TextSize(size.small).Text("Max price pump:", str.tostring(max_pump) + ' %, ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
         tbb2.R(17).TextColor(tableText).TextSize(size.small).Text("Max price drop ATRP:", str.tostring(max_drop_atrp) + ' %, ' + str.tostring(drop_month) + '/' + str.tostring(drop_date)).Bg(rowBG)
         tbb2.R(18).TextColor(tableText).TextSize(size.small).Text("Max price pump ATRP:", str.tostring(max_pump_atrp) + ' %, ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
-
-
