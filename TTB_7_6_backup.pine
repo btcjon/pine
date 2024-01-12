@@ -282,7 +282,6 @@ else if strategy.position_size < 0 and i == 0
         S_threshold
 
 
-
 groupTitleSOsLongConditions = "Long SO Conditions"
 //UseThreshold_long_SO = input.bool(false, "Use long SO Threshold", group = groupTitleSOsLongConditions)
 use_SO_filters_long = input.bool(false, "Use SO filter Long", group = groupTitleSOsLongConditions)
@@ -450,10 +449,8 @@ if low < price_drop and window and strategy.position_size > 0
         drop_date := dayofmonth(time)
         drop_month := month(time)
     price_change_percentage = ((initial_price - price_drop) / initial_price) * 100
-    max_drop_atrp_temp := price_change_percentage / atrp_daily
-    if max_drop_atrp_temp > max_drop_atrp
-        max_drop_atrp := max_drop_atrp_temp
-
+    max_drop_atrp_temp = price_change_percentage / atrp_daily
+    max_drop_atrp := round_to(math.max(max_drop_atrp, max_drop_atrp_temp), 4)
     log.info("Max Drop ATRP: {0}, Max Drop: {1}, Price Drop: {2}, Date: {3}/{4}", max_drop_atrp, max_drop, price_drop, drop_month, drop_date)
 bgcolor(max_drop_atrp[1] < max_drop_atrp ? color.new(#00bbd4, 24) : na)
 plot(max_drop_atrp[1] < max_drop_atrp ? max_drop_atrp : na, title="Max Drop ATRP", color=color.new(color.red, 100))
@@ -463,10 +460,8 @@ plot(max_drop[1] < max_drop ? max_drop : na, title="Max Drop", color=color.new(c
 if high > price_pump and window and strategy.position_size < 0
     price_pump := high
     price_change_percentage = ((price_pump - initial_S_price) / initial_S_price) * 100
-    max_pump_atrp_temp := price_change_percentage / atrp_daily
-    if max_pump_atrp_temp > max_pump_atrp
-        max_pump_atrp := max_pump_atrp_temp
-
+    max_pump_atrp_temp = price_change_percentage / atrp_daily
+    max_pump_atrp := round_to(math.max(max_pump_atrp, max_pump_atrp_temp), 4)
     if max_pump < price_change_percentage
         max_pump := price_change_percentage
         pump_date := dayofmonth(time)
@@ -475,46 +470,6 @@ if high > price_pump and window and strategy.position_size < 0
 bgcolor(max_pump_atrp[1] < max_pump_atrp ? color.new(#9b27b0, 22) : na)
 plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=color.new(color.green, 100))
 plot(max_pump[1] < max_pump ? max_pump : na, title="Max Pump", color=color.new(color.green, 100))
-
-
-
-// if low < price_drop and window and strategy.position_size > 0
-//     price_drop := low
-//     if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
-//         max_drop := int((1 - price_drop / initial_price) * 10000) / 100
-//         drop_date := dayofmonth(time)
-//         drop_month := month(time)
-//         drop_month
-// bgcolor(max_drop[1] < max_drop ? color.new(#00bbd4, 24) : na)
-
-// if high > price_pump and window and strategy.position_size < 0
-//     price_pump := high
-//     if max_pump < int((price_pump / initial_S_price - 1) * 10000) / 100
-//         max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
-//         pump_date := dayofmonth(time)
-//         pump_month := month(time)
-//         pump_month
-// bgcolor(max_pump[1] < max_pump ? color.new(#9b27b0, 22) : na)
-
-// if low < price_drop and window and strategy.position_size > 0
-//     price_drop := low
-//     max_drop_atrp := (price_drop / atr_value) * 100
-//     drop_date := dayofmonth(time)
-//     drop_month := month(time)
-//     drop_month
-//     log.info("Max Drop ATRP: {0}, Price Drop: {1}, Date: {2}/{3}", max_drop_atrp, price_drop, drop_date, drop_month)
-// plot(max_drop_atrp[1] < max_drop_atrp ? max_drop_atrp : na, title="Max Drop ATRP", color=na)
-
-// if high > price_pump and window and strategy.position_size < 0
-//     price_pump := high
-//     max_pump_atrp := (price_pump / atr_value) * 100
-//     pump_date := dayofmonth(time)
-//     pump_month := month(time)
-//     pump_month
-//     log.info("Max Pump ATRP: {0}, Price Pump: {1}, Date: {2}/{3}", max_pump_atrp, price_pump, pump_date, pump_month)
-// plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=na)
-
-
 
 
 if take_profit_level > 0 and strategy.position_size > 0
