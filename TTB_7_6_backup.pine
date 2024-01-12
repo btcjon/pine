@@ -145,8 +145,8 @@ var initial_price = 0.0
 var initial_S_price = 0.0
 var price_drop = 0.0
 var price_pump = 0.0
-var float[] SO_distance = array.new_float()
-var float[] S_SO_distance = array.new_float()
+var float[] SO_distance = array.new_float(max_safe_order)
+var float[] S_SO_distance = array.new_float(max_S_safe_order)
 var max_drop = 0.0
 var max_pump = 0.0
 var pump_date = 0
@@ -271,24 +271,20 @@ if strategy.position_size == 0
 //Safety order (SO) levels
 if strategy.position_size > 0 and i == 0
     atrp_distance = atrp_daily * max_atrp_SO_distance
-    array.clear(SO_distance)
     for j = 1 to max_safe_order
         if j == 1
             array.set(SO_distance, j - 1, initial_order - initial_order * price_deviation)
         else
             array.set(SO_distance, j - 1, initial_order - initial_order * (price_deviation + (atrp_distance - price_deviation) * (math.pow(j / max_safe_order, 2))))
-    if current_so <= array.size(SO_distance)
-        threshold := array.get(SO_distance, current_so - 1)
+    threshold := array.get(SO_distance, math.min(current_so - 1, max_safe_order - 1))
 else if strategy.position_size < 0 and i == 0
     atrp_distance = atrp_daily * max_atrp_SO_distance
-    array.clear(S_SO_distance)
     for j = 1 to max_S_safe_order
         if j == 1
             array.set(S_SO_distance, j - 1, initial_S_order * (1 + price_S_deviation))
         else
             array.set(S_SO_distance, j - 1, initial_S_order * (1 + price_S_deviation + (atrp_distance - price_S_deviation) * (math.pow(j / max_S_safe_order, 2))))
-    if current_so <= array.size(S_SO_distance)
-        S_threshold := array.get(S_SO_distance, current_so - 1)
+    S_threshold := array.get(S_SO_distance, math.min(current_so - 1, max_S_safe_order - 1))
 
 // //Safety order (SO) levels
 // if strategy.position_size > 0 and i == 0
