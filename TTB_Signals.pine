@@ -37,13 +37,18 @@ var float the_trend = na
 
 
 // ATRP
-atrp_length = input.int(75, title='ATRP Length', minval=1)
+atrp_length = input.int(14, title='ATRP Length', minval=1)
+atrp_length_d = input.int(2, title='ATRP Length for Daily', minval=1)
+atrp_length_deviation = input.int(7, title='ATRP Length for deviation', minval=1)
+ATRP_deviation_factor = input.float(1.0, title='ATRP Daily Factor', step=0.01)
+ATRP_daily_factor = input.float(0.15, title='ATRP Daily Factor', step=0.01)
 
 // Declare variables
 var trp = float(0)
 var atrp = float(0)
+var float atrp_daily = na
 
-// Calculate true range percent
+//True Range Percentage Calculation
 trp := ta.tr / hl2 * 100
 
 round_to(n, decimals) =>
@@ -53,13 +58,21 @@ round_to(n, decimals) =>
     round_n = na(n * mult + 0.5) ? na : (n * mult + 0.5) - (n * mult + 0.5) % 1
     round_n / mult
 
-// Calculate smoothed percentage range
+// Smoothed true range percentage calculation
 atrp := ta.sma(trp, atrp_length)
 
-//atrp_htf1 = f_security(ticker, HTF1, atrp, i_repaint)
-atrp_htf1 = round_to(f_security(ticker, HTF1_str, atrp, i_repaint), 4)
-atrp_htf2 = round_to(f_security(ticker, HTF2_str, atrp, i_repaint), 4)
-atrp_htf3 = round_to(f_security(ticker, HTF3_str, atrp, i_repaint), 4)
+// Daily ATRP calculation
+atrp_daily_temp = round_to(f_security(ticker, "D", atrp, i_repaint), 4)
+// Get and store yesterday's ATRP value
+atrp_daily_yesterday = atrp_daily_temp[1]
+
+if not barstate.isfirst
+    atrp_daily := atrp_daily_yesterday
+//define ATRP Target to be used in Take Profit Calculations
+atrp_target = atrp_daily * ATRP_daily_factor
+
+atrp_deviation_temp = round_to(f_security(ticker, "D", ta.sma(trp, atrp_length_deviation), i_repaint), 4)
+atrp_deviation = atrp_deviation_temp * ATRP_deviation_factor
 //end atrp
 
 
@@ -1111,6 +1124,6 @@ fill(plot_ts_htf2, plot_midpoint_candle, price_below_ts_htf2 ? low : na, ts_htf2
 var tbb = TTBTableBuilder.new(position.top_right,7,2)
 if barstate.isconfirmed
 	header = tbb.R(0).TextColor(color.rgb(18, 247, 255)).TextSize(size.small).Font(font.family_monospace)
-	header.Text("HTF2","HTF3","ATRP","ATRP_HTF1","AVG ATR","ATR")
-    tbb.R(1).TextColor(color.white).TextSize(size.small).Text(str.tostring(trendstatusHTF2),str.tostring(trendstatusHTF3),str.tostring(atrp),str.tostring(atrp_htf1),str.tostring(avg_atr),str.tostring(ATR)).Bg(color.rgb(255, 255, 255, 74))
+	header.Text("HTF2","HTF3","ATRP D","ATRP Dev","ATR")
+    tbb.R(1).TextColor(color.white).TextSize(size.small).Text(str.tostring(trendstatusHTF2),str.tostring(trendstatusHTF3),str.tostring(ATRP_daily_factor),str.tostring(atrp_deviation),str.tostring(ATR)).Bg(color.rgb(255, 255, 255, 74))
 	// tbb.R(2).TextColor(color.white).TextSize(size.small).Text("A","B","C")
