@@ -98,6 +98,7 @@ long_trigger = input(title='Long trigger value', defval=1)
 short_trigger = input(title='Short trigger value', defval=-1)
 trigger = input(title='Enter trigger', defval=close)
 price_deviation = input.float(0.06, title='Price deviation to open safety orders (%)', step=0.1, minval=0.0) / 100
+max_atrp_SO_distance = input.float(0.004, title='Max ATRP SO Distance', step=0.001, minval=0.001)
 //take_profit = input.float(0.09, title='Target Take Profit (%)', step=0.1, minval=0.0) / 100
 take_profit = atrp_target/ 100
 base_order_lots = input.float(0.4, title='Base Order Size (Lots)', step=0.01)
@@ -186,12 +187,23 @@ take_S_profit_level := avg_price * (1 - take_S_profit)
 no_trade_time = (hour(time) == 0 and minute(time) < 59)
 
 
-// First Position
+// // First Position price % based
+// for i = 0 to max_safe_order - 1 by 1
+//     maxDev := int((maxDev + price_deviation * 100 * math.pow(safe_order_step_scale, i)) * 100) / 100
+//     maxDev
+// for i = 0 to max_S_safe_order - 1 by 1
+//     maxSDev := int((maxSDev + price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
+//     maxSDev
+
+atrp_price_deviation = atrp_daily * max_atrp_SO_distance / max_safe_order
+atrp_price_S_deviation = atrp_daily * max_atrp_SO_distance / max_S_safe_order
+
+// First Position (ATRP based)
 for i = 0 to max_safe_order - 1 by 1
-    maxDev := int((maxDev + price_deviation * 100 * math.pow(safe_order_step_scale, i)) * 100) / 100
+    maxDev := int((maxDev + atrp_price_deviation * 100 * math.pow(safe_order_step_scale, i)) * 100) / 100
     maxDev
 for i = 0 to max_S_safe_order - 1 by 1
-    maxSDev := int((maxSDev + price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
+    maxSDev := int((maxSDev + atrp_price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
     maxSDev
 
 if math.abs(strategy.position_size) != 0 and current_so[1] == 0
@@ -225,7 +237,7 @@ if long and
     total_qty_in_trade := base_order_lots * 100000
     //initial_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level)
+    log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_profit_level)
 
 // short entry
 else if short and 
@@ -253,7 +265,7 @@ else if short and
     total_qty_in_trade := base_S_order_lots * 100000
     //initial_S_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_S_order_lots * 100000), safe_S_order_volume_scale, safe_S_order_step_scale, take_S_profit_level)
+    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level)
 longId = "Long" + str.tostring(long_sequence_counter)
 shortId = "Short" + str.tostring(short_sequence_counter)
 
@@ -265,23 +277,45 @@ if strategy.position_size == 0
     S_threshold
 
 
+// //Safety order (SO) levels
+// if strategy.position_size > 0 and i == 0
+//     if safe_order_step_scale == 1.0
+//         threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
+//         threshold
+//     else
+//         threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
+//         threshold
+// else if strategy.position_size < 0 and i == 0
+//     if safe_S_order_step_scale == 1.0
+//         S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
+//         S_threshold
+//     else
+//         S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
+//         S_threshold
+
 //Safety order (SO) levels
 if strategy.position_size > 0 and i == 0
+//    atrp_price_deviation = atrp_daily * max_atrp_SO_distance / max_safe_order
     if safe_order_step_scale == 1.0
-        threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * current_so
+        threshold := initial_order - atrp_price_deviation * current_so
         threshold
     else
-        threshold := initial_order - initial_order * (price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1))
+        threshold := initial_order - atrp_price_deviation * (math.pow(safe_order_step_scale, current_so) - 1) / (safe_order_step_scale - 1)
         threshold
+        //log.info("Threshold: {0}", threshold)
 else if strategy.position_size < 0 and i == 0
+ //   atrp_price_S_deviation = atrp_daily * max_atrp_SO_distance / max_S_safe_order
     if safe_S_order_step_scale == 1.0
-        S_threshold := initial_S_order * (1 + price_S_deviation * current_so)
+        S_threshold := initial_S_order + atrp_price_S_deviation * current_so
         S_threshold
     else
-        S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1))
+        S_threshold := initial_S_order + atrp_price_S_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1) / (safe_S_order_step_scale - 1)
         S_threshold
-
-
+        //log.info("S Threshold: {0}", S_threshold)
+plot(threshold, color=color.rgb(255, 82, 82, 94), title="Threshold")
+plot(S_threshold, color=color.rgb(33, 149, 243, 94), title="S_Threshold")
+// log.info("Threshold: {0}", threshold)
+// log.info("S Threshold: {0}", s_threshold)
 
 groupTitleSOsLongConditions = "Long SO Conditions"
 //UseThreshold_long_SO = input.bool(false, "Use long SO Threshold", group = groupTitleSOsLongConditions)
@@ -450,65 +484,27 @@ if low < price_drop and window and strategy.position_size > 0
         drop_date := dayofmonth(time)
         drop_month := month(time)
     price_change_percentage = ((initial_price - price_drop) / initial_price) * 100
-    max_drop_atrp := price_change_percentage / atr_value
-    log.info("Max Drop ATRP: {0}, Max Drop: {1}, Price Drop: {2}, Date: {3}/{4}", max_drop_atrp, max_drop, price_drop, drop_month, drop_date)
-bgcolor(max_drop[1] < max_drop ? color.new(#00bbd4, 24) : na)
-plot(max_drop[1] < max_drop ? max_drop : na, title="Max Drop", color=color.new(color.red, 100))
+    max_drop_atrp_temp = price_change_percentage / atrp_daily
+    max_drop_atrp := round_to(math.max(max_drop_atrp, max_drop_atrp_temp), 4)
+    //log.info("Max Drop ATRP: {0}, Max Drop: {1}, Price Drop: {2}, Date: {3}/{4}", max_drop_atrp, max_drop, price_drop, drop_month, drop_date)
+bgcolor(max_drop_atrp[1] < max_drop_atrp ? color.new(#00bbd4, 100) : na)
 plot(max_drop_atrp[1] < max_drop_atrp ? max_drop_atrp : na, title="Max Drop ATRP", color=color.new(color.red, 100))
+plot(max_drop[1] < max_drop ? max_drop : na, title="Max Drop", color=color.new(#ff5252, 100))
 
 
 if high > price_pump and window and strategy.position_size < 0
     price_pump := high
-    if max_pump < int((price_pump / initial_S_price - 1) * 10000) / 100
-        max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
+    price_change_percentage = ((price_pump - initial_S_price) / initial_S_price) * 100
+    max_pump_atrp_temp = price_change_percentage / atrp_daily
+    max_pump_atrp := round_to(math.max(max_pump_atrp, max_pump_atrp_temp), 4)
+    if max_pump < price_change_percentage
+        max_pump := price_change_percentage
         pump_date := dayofmonth(time)
         pump_month := month(time)
-    price_increase_percentage = ((price_pump - initial_S_price) / initial_S_price) * 100
-    max_pump_atrp := price_increase_percentage / atr_value
-    log.info("Max Pump ATRP: {0}, Max Pump: {1}, Price Pump: {2}, Date: {3}/{4}", max_pump_atrp, max_pump, price_pump, pump_month, pump_date)
-bgcolor(max_pump[1] < max_pump ? color.new(#9b27b0, 22) : na)
+    //log.info("Max Pump ATRP: {0}, Max Pump: {1}, Price Pump: {2}, Date: {3}/{4}", max_pump_atrp, max_pump, price_pump, pump_month, pump_date)
+bgcolor(max_pump_atrp[1] < max_pump_atrp ? color.new(#9b27b0, 100) : na)
+plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=color.new(#4caf4f, 100))
 plot(max_pump[1] < max_pump ? max_pump : na, title="Max Pump", color=color.new(color.green, 100))
-plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=color.new(color.green, 100))
-
-
-
-// if low < price_drop and window and strategy.position_size > 0
-//     price_drop := low
-//     if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
-//         max_drop := int((1 - price_drop / initial_price) * 10000) / 100
-//         drop_date := dayofmonth(time)
-//         drop_month := month(time)
-//         drop_month
-// bgcolor(max_drop[1] < max_drop ? color.new(#00bbd4, 24) : na)
-
-// if high > price_pump and window and strategy.position_size < 0
-//     price_pump := high
-//     if max_pump < int((price_pump / initial_S_price - 1) * 10000) / 100
-//         max_pump := int((price_pump / initial_S_price - 1) * 10000) / 100
-//         pump_date := dayofmonth(time)
-//         pump_month := month(time)
-//         pump_month
-// bgcolor(max_pump[1] < max_pump ? color.new(#9b27b0, 22) : na)
-
-// if low < price_drop and window and strategy.position_size > 0
-//     price_drop := low
-//     max_drop_atrp := (price_drop / atr_value) * 100
-//     drop_date := dayofmonth(time)
-//     drop_month := month(time)
-//     drop_month
-//     log.info("Max Drop ATRP: {0}, Price Drop: {1}, Date: {2}/{3}", max_drop_atrp, price_drop, drop_date, drop_month)
-// plot(max_drop_atrp[1] < max_drop_atrp ? max_drop_atrp : na, title="Max Drop ATRP", color=na)
-
-// if high > price_pump and window and strategy.position_size < 0
-//     price_pump := high
-//     max_pump_atrp := (price_pump / atr_value) * 100
-//     pump_date := dayofmonth(time)
-//     pump_month := month(time)
-//     pump_month
-//     log.info("Max Pump ATRP: {0}, Price Pump: {1}, Date: {2}/{3}", max_pump_atrp, price_pump, pump_date, pump_month)
-// plot(max_pump_atrp[1] < max_pump_atrp ? max_pump_atrp : na, title="Max Pump ATRP", color=na)
-
-
 
 
 if take_profit_level > 0 and strategy.position_size > 0
@@ -569,5 +565,3 @@ if show_table
         tbb2.R(16).TextColor(tableText).TextSize(size.small).Text("Max price pump:", str.tostring(max_pump) + ' %, ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
         tbb2.R(17).TextColor(tableText).TextSize(size.small).Text("Max price drop ATRP:", str.tostring(max_drop_atrp) + ' %, ' + str.tostring(drop_month) + '/' + str.tostring(drop_date)).Bg(rowBG)
         tbb2.R(18).TextColor(tableText).TextSize(size.small).Text("Max price pump ATRP:", str.tostring(max_pump_atrp) + ' %, ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
-
-
