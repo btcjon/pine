@@ -208,15 +208,8 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev
 
 // Calculate maxDevATRP within the correct scope
-if barstate.isnew
-    maxDevATRP := 0.0 // Reset maxDevATRP for the new bar calculation
-    for i = 1 to max_safe_order
-        so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
-        maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
-    for i = 1 to max_S_safe_order
-        soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
-        maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
-    maxDevATRP := round_to(maxDevATRP, 3) // Round maxDevATRP to 3 decimal places
+// Initialize maxDevATRP at the start of the script
+var float maxDevATRP = 0.0
 
 
 
@@ -295,6 +288,7 @@ if strategy.position_size == 0
     S_threshold
 
 // Safety order (SO) levels calculation
+// Update maxDevATRP when a new SO is executed for long positions
 if strategy.position_size > 0 and i == 0
     // Long position logic
     atrp_price_deviation = atrp_daily * atrp_SO_deviation / max_safe_order
@@ -302,6 +296,9 @@ if strategy.position_size > 0 and i == 0
     if current_so > 0
         // Calculate the distance for the current SO
         so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, current_so - 1)
+        // Update maxDevATRP with the cumulative deviation
+        cumulativeDev := maxDevATRP + (so_distance / atrp_daily)
+        maxDevATRP := math.max(maxDevATRP, cumulativeDev)
         // Set the threshold based on the last SO's execution price and the calculated distance
         threshold := nz(last_so_exec_price, initial_order) - so_distance
     else
@@ -309,12 +306,17 @@ if strategy.position_size > 0 and i == 0
         threshold := initial_order - atrp_price_deviation
 
 else if strategy.position_size < 0 and i == 0
+// Update maxDevATRP when a new SO is executed for short positions
+if strategy.position_size < 0 and i == 0
     // Short position logic
     atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 
     if current_so > 0
         // Calculate the distance for the current SO
         so_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, current_so - 1)
+        // Update maxDevATRP with the cumulative deviation
+        cumulativeDev := maxDevATRP + (so_distance / atrp_daily)
+        maxDevATRP := math.max(maxDevATRP, cumulativeDev)
         // Set the threshold based on the last SO's execution price and the calculated distance
         S_threshold := nz(last_so_exec_price, initial_S_order) + so_distance
     else
@@ -552,7 +554,8 @@ profit_color = strategy.openprofit < 0 ? bearish : bullish
 bgcolor(no_trade_time ? color.new(#3a3a3b, 84) : na)
 
 // plot Max Deviation
-plot(maxDevATRP, title="Max Deviation ATRP", color=color.blue)
+// Plot the rounded value of maxDevATRP
+plot(round_to(maxDevATRP, 3), title="Max Deviation ATRP", color=color.blue)
 //plot(maxSDevATRP, title="Max Deviation ATRP - Shorts", color=color.red)
 
 
