@@ -466,30 +466,21 @@ if take_S_profit_level >= low and
 if strategy.position_size == 0
     if soCount == 1
         noSO += 1
-        noSO
     else if soCount == 2
         SO1 += 1
-        SO1
     else if soCount == 3
         SO2 += 1
-        SO2
     else if soCount == 4
         SO3 += 1
-        SO3
     else if soCount == 5
         SO4 += 1
-        SO4
     else if soCount == 6
         SO5 += 1
-        SO5
     else if soCount == 7
         SO6 += 1
-        SO6
     else if soCount == 8
         SO7 += 1
-        SO7
     soCount := 0
-    soCount
 closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
 
 
