@@ -180,6 +180,8 @@ take_profit_level := avg_price * (1 + take_profit)
 take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
+var float maxDevATRP = na // Initialize with 'na' to indicate it's not yet calculated
+
 // NO trade time
 no_trade_time = (hour(time) == 0 and minute(time) < 59)
 
@@ -206,7 +208,15 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev
 
 // Calculate maxDevATRP within the correct scope
-// Removed duplicate declaration of maxDevATRP
+if barstate.isnew
+    maxDevATRP := 0.0 // Reset maxDevATRP for the new bar calculation
+    for i = 1 to max_safe_order
+        so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
+    maxDevATRP := round_to(maxDevATRP, 3) // Round maxDevATRP to 3 decimal places
 
 
 
@@ -273,7 +283,7 @@ else if short and
     last_so_bar := na
     //initial_S_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, atrp_price_deviation: {7}, safe_order_step_scale: {8}, maxDevATRP: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, atrp_price_deviation, safe_order_step_scale, maxDevATRP)
+    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, safe_order_step_scale: {8}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, safe_order_step_scale)
 longId = "Long" + str.tostring(long_sequence_counter)
 shortId = "Short" + str.tostring(short_sequence_counter)
 
@@ -285,7 +295,6 @@ if strategy.position_size == 0
     S_threshold
 
 // Safety order (SO) levels calculation
-// Update maxDevATRP when a new SO is executed for long positions
 if strategy.position_size > 0 and i == 0
     // Long position logic
     atrp_price_deviation = atrp_daily * atrp_SO_deviation / max_safe_order
@@ -293,26 +302,19 @@ if strategy.position_size > 0 and i == 0
     if current_so > 0
         // Calculate the distance for the current SO
         so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, current_so - 1)
-        // Update maxDevATRP with the cumulative deviation
-        cumulativeDev := maxDevATRP + (so_distance / atrp_daily)
-        maxDevATRP := math.max(maxDevATRP, cumulativeDev)
         // Set the threshold based on the last SO's execution price and the calculated distance
         threshold := nz(last_so_exec_price, initial_order) - so_distance
     else
         // First SO calculation
         threshold := initial_order - atrp_price_deviation
 
-// Update maxDevATRP when a new SO is executed for short positions
-if strategy.position_size < 0 and i == 0
+else if strategy.position_size < 0 and i == 0
     // Short position logic
     atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 
     if current_so > 0
         // Calculate the distance for the current SO
         so_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, current_so - 1)
-        // Update maxDevATRP with the cumulative deviation
-        cumulativeDev := maxDevATRP + (so_distance / atrp_daily)
-        maxDevATRP := math.max(maxDevATRP, cumulativeDev)
         // Set the threshold based on the last SO's execution price and the calculated distance
         S_threshold := nz(last_so_exec_price, initial_S_order) + so_distance
     else
@@ -462,21 +464,30 @@ if take_S_profit_level >= low and
 if strategy.position_size == 0
     if soCount == 1
         noSO += 1
+        noSO
     else if soCount == 2
         SO1 += 1
+        SO1
     else if soCount == 3
         SO2 += 1
+        SO2
     else if soCount == 4
         SO3 += 1
+        SO3
     else if soCount == 5
         SO4 += 1
+        SO4
     else if soCount == 6
         SO5 += 1
+        SO5
     else if soCount == 7
         SO6 += 1
+        SO6
     else if soCount == 8
         SO7 += 1
+        SO7
     soCount := 0
+    soCount
 closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
 
 
@@ -541,8 +552,7 @@ profit_color = strategy.openprofit < 0 ? bearish : bullish
 bgcolor(no_trade_time ? color.new(#3a3a3b, 84) : na)
 
 // plot Max Deviation
-// Plot the rounded value of maxDevATRP
-plot(round_to(maxDevATRP, 3), title="Max Deviation ATRP", color=color.blue)
+plot(maxDevATRP, title="Max Deviation ATRP", color=color.blue)
 //plot(maxSDevATRP, title="Max Deviation ATRP - Shorts", color=color.red)
 
 
