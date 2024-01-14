@@ -103,8 +103,9 @@ atrp_daily_temp = round_to(f_security(ticker, "D", atrps, i_repaint), 4)
 // Get and store yesterday's ATRP value
 atrp_daily_yesterday = atrp_daily_temp[1]
 
-if not barstate.isfirst
+if not na(atrp_daily) and not barstate.isfirst
     atrp_daily := atrp_daily_yesterday
+    maxDevATRP := calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order)
 //define ATRP Target to be used in Take Profit Calculations
 atrp_target = atrp_daily * ATRP_daily_factor
 
@@ -180,7 +181,18 @@ take_profit_level := avg_price * (1 + take_profit)
 take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
-var float maxDevATRP = 0.0
+var float maxDevATRP = na // Initialize with 'na' to indicate it's not yet calculated
+
+// Function to calculate the maximum deviation based on ATRP
+calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order) =>
+    var float maxDev = na
+    for i = 1 to max_safe_order
+        so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDev := na(maxDev) ? so_distance / atrp_daily : math.max(maxDev, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDev := na(maxDev) ? soS_distance / atrp_daily : math.max(maxDev, soS_distance / atrp_daily)
+    maxDev
 
 // NO trade time
 no_trade_time = (hour(time) == 0 and minute(time) < 59)
