@@ -182,14 +182,23 @@ take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
 var float maxDevATRP = 0.0 // Initialize with 0.0 as the starting maximum deviation
-var float atrp_price_deviation = na // Initialize the variable for ATRP price deviation for longs
-var float atrp_price_S_deviation = na // Initialize the variable for ATRP price deviation for shorts
+var float atrp_price_deviation = 0.0 // Initialize the variable for ATRP price deviation for longs
+var float atrp_price_S_deviation = 0.0 // Initialize the variable for ATRP price deviation for shorts
 
 // Function to calculate the maximum deviation based on ATRP
 // Function to calculate the maximum deviation based on ATRP
 // Function to calculate the maximum deviation based on ATRP
 // Function to calculate the maximum deviation based on ATRP
+// Function to calculate the maximum deviation based on ATRP
 calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order) =>
+    float maxDev = 0.0
+    for i = 1 to max_safe_order
+        float so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDev := math.max(maxDev, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        float soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDev := math.max(maxDev, soS_distance / atrp_daily)
+    maxDev
     float maxDev = 0.0
     for i = 1 to max_safe_order
         float so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
@@ -252,7 +261,16 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 // Function to calculate the maximum deviation based on ATRP
 // Function to calculate the maximum deviation based on ATRP
 // Function to calculate the maximum deviation based on ATRP
+// Function to calculate the maximum deviation based on ATRP
 calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order) =>
+    float maxDev = 0.0
+    for i = 1 to max_safe_order
+        float so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDev := math.max(maxDev, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        float soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDev := math.max(maxDev, soS_distance / atrp_daily)
+    maxDev
     float maxDev = 0.0
     for i = 1 to max_safe_order
         float so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
@@ -288,6 +306,9 @@ calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe
 
 // Calculate the first SO deviation and update maxDevATRP on each bar calculation
 if barstate.isnew
+    atrp_price_deviation := atrp_daily * atrp_SO_deviation / max_safe_order
+    atrp_price_S_deviation := atrp_daily * atrp_SO_deviation / max_S_safe_order
+    maxDevATRP := calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order)
     atrp_price_deviation := atrp_daily * atrp_SO_deviation / max_safe_order
     atrp_price_S_deviation := atrp_daily * atrp_SO_deviation / max_S_safe_order
     maxDevATRP := calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order)
