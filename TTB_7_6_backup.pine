@@ -180,7 +180,7 @@ take_profit_level := avg_price * (1 + take_profit)
 take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
-var float maxDevATRP = 0.0
+var float maxDevATRP = na // Initialize with 'na' to indicate it's not yet calculated
 
 // NO trade time
 no_trade_time = (hour(time) == 0 and minute(time) < 59)
@@ -207,13 +207,15 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev := int((maxSDev + atrp_price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
 //     maxSDev
 
-for i = 1 to max_safe_order
-    so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
-    maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
-
-for i = 1 to max_S_safe_order
-    soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
-    maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
+// Calculate maxDevATRP within the correct scope
+if barstate.isnew
+    maxDevATRP := 0.0 // Reset maxDevATRP for the new bar calculation
+    for i = 1 to max_safe_order
+        so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
 
 
 
