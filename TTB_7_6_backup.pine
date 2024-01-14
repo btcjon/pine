@@ -305,7 +305,6 @@ if strategy.position_size > 0 and i == 0
         // First SO calculation
         threshold := initial_order - atrp_price_deviation
 
-else if strategy.position_size < 0 and i == 0
 // Update maxDevATRP when a new SO is executed for short positions
 if strategy.position_size < 0 and i == 0
     // Short position logic
