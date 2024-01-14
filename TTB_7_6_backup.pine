@@ -181,7 +181,7 @@ take_profit_level := avg_price * (1 + take_profit)
 take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
-var float maxDevATRP = na // Initialize with 'na' to indicate it's not yet calculated
+var float maxDevATRP = 0.0 // Initialize with 0.0 as the starting maximum deviation
 
 // Function to calculate the maximum deviation based on ATRP
 calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order) =>
@@ -219,13 +219,19 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev := int((maxSDev + atrp_price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
 //     maxSDev
 
-for i = 1 to max_safe_order
-    so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
-    maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
+// Function to calculate the maximum deviation based on ATRP
+calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order) =>
+    var float maxDev = 0.0
+    for i = 1 to max_safe_order
+        so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDev := math.max(maxDev, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDev := math.max(maxDev, soS_distance / atrp_daily)
+    maxDev
 
-for i = 1 to max_S_safe_order
-    soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
-    maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
+// Update maxDevATRP on each bar calculation
+maxDevATRP := calcMaxDevATRP(atrp_daily, atrp_price_deviation, safe_order_step_scale, max_safe_order, atrp_price_S_deviation, safe_S_order_step_scale, max_S_safe_order)
 
 
 
