@@ -258,8 +258,6 @@ if long and
     total_qty_in_trade
     log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_profit_level)
 
-// Initialize maxDevATRP at the start of a new short trade round
-maxDevATRP := 0.0
 else if short and
    bar_index > barsToWait and
    strategy.position_size == 0 and 
@@ -267,6 +265,36 @@ else if short and
    window and
    not no_trade_time and
    trigger == short_trigger
+    short_sequence_counter := short_sequence_counter + 1
+    shortId = "Short" + str.tostring(short_sequence_counter)
+    _string_short = ""
+    if webhookMessage == "fdas"
+        _string_short := 'type=order,order-type=short,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '",entry=true'
+    else if webhookMessage == "pineconnector"
+        _string_short := str.tostring(ID) + ',short,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '"'
+    strategy.order(shortId, strategy.short, qty=(base_order_lots * 100000), comment="#" + str.tostring(short_sequence_counter) + "S E " + str.tostring(close), alert_message=_string_short)
+    initial_S_order := close
+    current_so := 1
+    firstBarTime := time
+    tradeCount += 1
+    initial_S_price := close
+    price_pump := close
+    avg_price := close
+    total_funds_in_trade := avg_price * base_S_order_lots *100000
+    total_qty_in_trade := base_S_order_lots * 100000
+    last_so_bar := na
+    //initial_S_atrp = atrps(close, atrp_length)
+    total_qty_in_trade
+    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, safe_order_step_scale: {8}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, safe_order_step_scale)
+// Initialize maxDevATRP at the start of a new short trade round
+if short and
+   bar_index > barsToWait and
+   strategy.position_size == 0 and 
+   close > 0 and 
+   window and
+   not no_trade_time and
+   trigger == short_trigger
+    maxDevATRP := 0.0
     short_sequence_counter := short_sequence_counter + 1
     shortId = "Short" + str.tostring(short_sequence_counter)
     _string_short = ""
