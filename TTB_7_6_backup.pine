@@ -216,6 +216,7 @@ if barstate.isnew
     for i = 1 to max_S_safe_order
         soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
         maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
+    maxDevATRP := round_to(maxDevATRP, 3) // Round maxDevATRP to 3 decimal places
 
 
 
