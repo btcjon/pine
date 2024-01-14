@@ -953,8 +953,8 @@ plotshape(series=signal == -1.0, title='Short', style=shape.triangledown, locati
 // END Signals
 
 
-
-
+var float SO_filter_longs_value = na
+var float SO_filter_shorts_value = na
 
 // SO Filters
 groupTitleSOFiltersLong = "SO Filters Long"
@@ -971,20 +971,20 @@ below_ts_htf1_filter_SO = input.bool(false, "Use hft1 short trend filter", group
 below_ts_htf2_filter_SO = input.bool(false, "Use hft2 short trend filter", group = groupTitleSOFiltersShort)
 below_ts_htf3_filter_SO = input.bool(false, "Use hft3 short trend filter", group = groupTitleSOFiltersShort)
 
-SO_filter_longs_cond = (trendingUp_filter_SO and trendingUp) or
-   (below_ts_htf1_filter_SO and below_ts_htf1) or
-   (below_ts_htf2_filter_SO and below_ts_htf2) or
-   (below_ts_htf3_filter_SO and below_ts_htf3) or
-   (twobardown_filter_SO and twobardown)
+// Long Filter Logic
+SO_filter_longs_cond = (not trendingUp_filter_SO or trendingUp) and 
+   (not twobarup_filter_SO or twobarup) and
+   (not above_ts_htf1_filter_SO or above_ts_htf1) and
+   (not above_ts_htf2_filter_SO or above_ts_htf2) and
+   (not above_ts_htf3_filter_SO or above_ts_htf3)
 
-SO_filter_shorts_cond = (trendingDown_filter_SO and trendingDown) or
-   (above_ts_htf1_filter_SO and above_ts_htf1) or
-   (above_ts_htf2_filter_SO and above_ts_htf2) or
-   (above_ts_htf3_filter_SO and above_ts_htf3) or
-   (twobarup_filter_SO and twobarup)
+// Short Filter Logic
+SO_filter_shorts_cond = (not trendingDown_filter_SO or trendingDown) and
+                         (not twobardown_filter_SO or twobardown) and
+                         (not below_ts_htf1_filter_SO or below_ts_htf1) and
+                         (not below_ts_htf2_filter_SO or below_ts_htf2) and
+                         (not below_ts_htf3_filter_SO or below_ts_htf3)
 
-var float SO_filter_longs_value = na
-var float SO_filter_shorts_value = na
 
 SO_filter_longs_value := SO_filter_longs_cond ? 1.0 : na
 SO_filter_shorts_value := SO_filter_shorts_cond ? -1.0 : na
@@ -1013,10 +1013,10 @@ SO_trigger_longs_cond = (trendUpSOTrigger_Long and trendUp) or
    (trendUp_htf2_SOTrigger_Long and trendChangeUpHTF2) or
    (trendUp_htf3_SOTrigger_Long and trendChangeUpHTF3)
 
-SO_trigger_shorts_cond = (trendDownSOTrigger_Short and trendDown) or
+SO_trigger_shorts_cond = (trendDownSOTrigger_Short and trendDown) or   
    (trendDown_htf1_SOTrigger_Short and trendChangeDownHTF1) or
    (trendDown_htf2_SOTrigger_Short and trendChangeDownHTF2) or
-   (trendDown_htf3_SOTrigger_Short and trendChangeDownHTF3) 
+   (trendDown_htf3_SOTrigger_Short and trendChangeDownHTF3)
 
 var float SO_trigger_longs_value = na
 var float SO_trigger_shorts_value = na
@@ -1024,8 +1024,8 @@ var float SO_trigger_shorts_value = na
 SO_trigger_longs_value := SO_trigger_longs_cond ? 1.0 : na
 SO_trigger_shorts_value := SO_trigger_shorts_cond ? -1.0 : na
 
-//plotshape(SO_trigger_longs_value, title="SO Trigger Longs", color=bullish, style=shape.diamond, location = location.belowbar, size=size.tiny)
-//plotshape(SO_trigger_shorts_value, title="SO Trigger Shorts", color=bearish, style=shape.diamond, location = location.abovebar, size=size.tiny)
+plotshape(SO_trigger_longs_value, title="SO Trigger Longs", color=bullish, style=shape.diamond, location = location.belowbar, size=size.large)
+plotshape(SO_trigger_shorts_value, title="SO Trigger Shorts", color=bearish, style=shape.diamond, location = location.abovebar, size=size.large)
 
 SO_triggers := SO_trigger_longs_value ? 1.0 : SO_trigger_shorts_value ? -1.0 : na
 plot(SO_triggers, title="SO Triggers", color=color.rgb(76, 175, 79, 94))
