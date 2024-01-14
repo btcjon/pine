@@ -208,8 +208,9 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev
 
 // Calculate maxDevATRP within the correct scope
-if barstate.isnew
-    maxDevATRP := 0.0 // Reset maxDevATRP for the new bar calculation
+// Initialize maxDevATRP at the start of a new trading round
+if strategy.position_size == 0
+    maxDevATRP := 0.0
     for i = 1 to max_safe_order
         so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
         maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
@@ -379,12 +380,19 @@ order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, curre
 if current_so > 0 and 
    i == 0 and 
    strategy.position_size < 0 and 
+// Update maxDevATRP after each safety order execution for short positions
+if current_so > 0 and strategy.position_size < 0 and
    high >= S_threshold and
    not no_trade_time and
    (useShort_SO_filters? SO_filter_input_short == SO_filter_value_short : true) and
    //(useShort_SO_trigger ? (current_so > min_S_SO_for_trigger and S_SO_trigger == short_SO_triggervalue) : true) and
    (na(last_so_bar) or bar_index > last_so_bar + MinSOBars) and
    current_so <= max_S_safe_order
+   // Existing safety order logic...
+   // Calculate the deviation for the current SO
+   soS_deviation_percentage = (soS_distance / atrp_daily) * 100
+   // Update maxDevATRP if the current SO deviation is greater than the previous maxDevATRP
+   maxDevATRP := math.max(maxDevATRP, soS_deviation_percentage)
     order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
     _string_short_so = ""
     if webhookMessage == "fdas"
