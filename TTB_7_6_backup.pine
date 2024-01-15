@@ -502,7 +502,7 @@ if low < price_drop and window and strategy.position_size > 0
     price_drop := low
     if max_drop < int((1 - price_drop / initial_price) * 10000) / 100
         max_drop := int((1 - price_drop / initial_price) * 10000) / 100
-        drop_date := dayofmonth(time)
+        drop_date := dayofmonth(time)you would need to
         drop_month := month(time)
     price_change_percentage = ((initial_price - price_drop) / initial_price) * 100
     max_drop_atrp_temp = price_change_percentage / atrp_daily
@@ -596,4 +596,14 @@ target_bars = input(20, title="Target Bars for Best TP Deviation")
 var float best_tp_deviation = na
 // Calculate best_tp_deviation as a percentage of the daily ATRP
 best_tp_deviation_percentage = best_tp_deviation * 100
+plot(best_tp_deviation_percentage, title="Best TP Deviation ATRP", color=color.purple)
+// User input for target bars to track the best take profit deviation
+target_bars = input(20, title="Target Bars for Best TP Deviation")
+
+// Initialize variable to store the best take profit deviation
+var float best_tp_deviation = na
+var float best_tp_deviation_percentage = na // Initialize with 'na' to indicate it's not yet calculated
+
+// Calculate best_tp_deviation as a percentage of the daily ATRP
+best_tp_deviation_percentage := best_tp_deviation * 100
 plot(best_tp_deviation_percentage, title="Best TP Deviation ATRP", color=color.purple)
