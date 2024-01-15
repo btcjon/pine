@@ -181,7 +181,6 @@ take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
 var float maxDevATRP = na // Initialize with 'na' to indicate it's not yet calculated
-var float soS_distance = na // Declare soS_distance variable with 'var' to maintain its value across bars
 
 // NO trade time
 no_trade_time = (hour(time) == 0 and minute(time) < 59)
@@ -209,10 +208,8 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev
 
 // Calculate maxDevATRP within the correct scope
-// Initialize maxDevATRP at the start of a new trading round
-// Reset maxDevATRP at the start of a new trading round
-if strategy.position_size == 0 and barstate.isnew
-    maxDevATRP := 0.0
+if barstate.isnew
+    maxDevATRP := 0.0 // Reset maxDevATRP for the new bar calculation
     for i = 1 to max_safe_order
         so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
         maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
@@ -227,8 +224,7 @@ if math.abs(strategy.position_size) != 0 and current_so[1] == 0
     strategy.close_all()
 
 
-// Initialize maxDevATRP at the start of a new long trade round
-maxDevATRP := 0.0
+// long entry
 if long and
    bar_index > barsToWait and 
    strategy.position_size == 0 and 
@@ -259,6 +255,7 @@ if long and
     total_qty_in_trade
     log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_profit_level)
 
+// short entry
 else if short and
    bar_index > barsToWait and
    strategy.position_size == 0 and 
@@ -286,37 +283,7 @@ else if short and
     last_so_bar := na
     //initial_S_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, safe_order_step_scale: {8}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, safe_order_step_scale)
-// Initialize maxDevATRP at the start of a new short trade round
-if short and
-   bar_index > barsToWait and
-   strategy.position_size == 0 and 
-   close > 0 and 
-   window and
-   not no_trade_time and
-   trigger == short_trigger
-    maxDevATRP := 0.0
-    short_sequence_counter := short_sequence_counter + 1
-    shortId = "Short" + str.tostring(short_sequence_counter)
-    _string_short = ""
-    if webhookMessage == "fdas"
-        _string_short := 'type=order,order-type=short,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '",entry=true'
-    else if webhookMessage == "pineconnector"
-        _string_short := str.tostring(ID) + ',short,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '"'
-    strategy.order(shortId, strategy.short, qty=(base_order_lots * 100000), comment="#" + str.tostring(short_sequence_counter) + "S E " + str.tostring(close), alert_message=_string_short)
-    initial_S_order := close
-    current_so := 1
-    firstBarTime := time
-    tradeCount += 1
-    initial_S_price := close
-    price_pump := close
-    avg_price := close
-    total_funds_in_trade := avg_price * base_S_order_lots *100000
-    total_qty_in_trade := base_S_order_lots * 100000
-    last_so_bar := na
-    //initial_S_atrp = atrps(close, atrp_length)
-    total_qty_in_trade
-    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, safe_order_step_scale: {8}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, safe_order_step_scale)
+    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, atrp_price_deviation: {7}, safe_order_step_scale: {8}, maxDevATRP: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, atrp_price_deviation, safe_order_step_scale, maxDevATRP)
 longId = "Long" + str.tostring(long_sequence_counter)
 shortId = "Short" + str.tostring(short_sequence_counter)
 
@@ -331,7 +298,6 @@ if strategy.position_size == 0
 if strategy.position_size > 0 and i == 0
     // Long position logic
     atrp_price_deviation = atrp_daily * atrp_SO_deviation / max_safe_order
-    var float so_distance = na // Declare so_distance variable
 
     if current_so > 0
         // Calculate the distance for the current SO
@@ -345,7 +311,6 @@ if strategy.position_size > 0 and i == 0
 else if strategy.position_size < 0 and i == 0
     // Short position logic
     atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
-
 
     if current_so > 0
         // Calculate the distance for the current SO
@@ -383,11 +348,7 @@ SO_filter_value_short = input(title='Short SO filter value', defval=-1, group = 
 // short_SO_triggervalue = input(title='Short trigger value', defval=-1, group = groupTitleSOsShortConditions)
 
 
-// Update maxDevATRP after each safety order execution for long positions
-if current_so > 0 and strategy.position_size > 0 and low <= threshold
-    so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, current_so - 1) // Assign value to so_distance
-    so_deviation_percentage = (so_distance / atrp_daily) * 100
-    maxDevATRP := math.max(maxDevATRP, so_deviation_percentage)
+// Average Down SOs (safety orders) for longs
 if current_so > 0 and
    i == 0 and 
    strategy.position_size > 0 and 
@@ -414,19 +375,16 @@ if current_so > 0 and
 
 order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
 
-// Update maxDevATRP after each safety order execution for short positions
-if current_so > 0 and strategy.position_size < 0
-    if high >= S_threshold
-        soS_distance := atrp_price_S_deviation * math.pow(safe_S_order_step_scale, current_so - 1) // Re-assign value to soS_distance
-        soS_distance := atrp_price_S_deviation * math.pow(safe_S_order_step_scale, current_so - 1) // Re-assign value to soS_distance
-        soS_deviation_percentage = (soS_distance / atrp_daily) * 100
-        maxDevATRP := math.max(maxDevATRP, soS_deviation_percentage)
-    if i == 0 and not no_trade_time and (useShort_SO_filters? SO_filter_input_short == SO_filter_value_short : true) and (na(last_so_bar) or bar_index > last_so_bar + MinSOBars) and current_so <= max_S_safe_order
-        // Existing safety order logic...
-        // Calculate the deviation for the current SO
-        soS_deviation_percentage = (soS_distance / atrp_daily) * 100
-        // Update maxDevATRP if the current SO deviation is greater than the previous maxDevATRP
-        maxDevATRP := math.max(maxDevATRP, soS_deviation_percentage)
+// Average Up SOs (safety orders) for longs
+if current_so > 0 and 
+   i == 0 and 
+   strategy.position_size < 0 and 
+   high >= S_threshold and
+   not no_trade_time and
+   (useShort_SO_filters? SO_filter_input_short == SO_filter_value_short : true) and
+   //(useShort_SO_trigger ? (current_so > min_S_SO_for_trigger and S_SO_trigger == short_SO_triggervalue) : true) and
+   (na(last_so_bar) or bar_index > last_so_bar + MinSOBars) and
+   current_so <= max_S_safe_order
     order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
     _string_short_so = ""
     if webhookMessage == "fdas"
