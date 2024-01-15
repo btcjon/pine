@@ -295,7 +295,10 @@ if strategy.position_size == 0
     S_threshold
 
 // Safety order (SO) levels calculation
-if strategy.position_size > 0 and i == 0
+// Update best_tp_deviation for long positions within target_bars
+if strategy.position_size > 0 and i == 0 and bar_index - entry_bar_index <= target_bars
+   high_since_entry = highest(high, bar_index - entry_bar_index + 1)
+   best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
     // Long position logic
     atrp_price_deviation = atrp_daily * atrp_SO_deviation / max_safe_order
 
@@ -308,7 +311,10 @@ if strategy.position_size > 0 and i == 0
         // First SO calculation
         threshold := initial_order - atrp_price_deviation
 
-else if strategy.position_size < 0 and i == 0
+else // Update best_tp_deviation for short positions within target_bars
+if strategy.position_size < 0 and i == 0 and bar_index - entry_bar_index <= target_bars
+   low_since_entry = lowest(low, bar_index - entry_bar_index + 1)
+   best_tp_deviation := math.min(nz(best_tp_deviation, 0), (entry_price - low_since_entry) / atrp_daily)
     // Short position logic
     atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 
@@ -583,3 +589,11 @@ if show_table
         tbb2.R(16).TextColor(tableText).TextSize(size.small).Text("Max price pump:", str.tostring(max_pump) + ' %, ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
         tbb2.R(17).TextColor(tableText).TextSize(size.small).Text("Max price drop ATRP:", str.tostring(max_drop_atrp) + ' %, ' + str.tostring(drop_month) + '/' + str.tostring(drop_date)).Bg(rowBG)
         tbb2.R(18).TextColor(tableText).TextSize(size.small).Text("Max price pump ATRP:", str.tostring(max_pump_atrp) + ' %, ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
+// User input for target bars to track the best take profit deviation
+target_bars = input(20, title="Target Bars for Best TP Deviation")
+
+// Initialize variable to store the best take profit deviation
+var float best_tp_deviation = na
+// Calculate best_tp_deviation as a percentage of the daily ATRP
+best_tp_deviation_percentage = best_tp_deviation * 100
+plot(best_tp_deviation_percentage, title="Best TP Deviation ATRP", color=color.purple)
