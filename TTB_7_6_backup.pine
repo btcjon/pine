@@ -615,14 +615,20 @@ var float best_tp_deviation = na
 var float best_tp_deviation_percentage = na // Initialize with 'na' to indicate it's not yet calculated
 
 // Update best_tp_deviation for long positions within target_bars
-if strategy.position_size > 0 and bar_index - entry_bar_index <= target_bars
-   high_since_entry = highest(high, bar_index - entry_bar_index + 1)
-   best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
+var float high_since_entry = na // Initialize with 'na' to indicate it's not yet calculated
+if strategy.position_size > 0
+    entry_bar_index = bar_index[1] // Assuming entry_bar_index is declared elsewhere with the correct entry bar index
+    if bar_index - entry_bar_index <= target_bars
+        high_since_entry := highest(high, bar_index - entry_bar_index + 1)
+        best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
 
 // Update best_tp_deviation for short positions within target_bars
-if strategy.position_size < 0 and bar_index - entry_bar_index <= target_bars
-   low_since_entry = lowest(low, bar_index - entry_bar_index + 1)
-   best_tp_deviation := math.min(nz(best_tp_deviation, 0), (entry_price - low_since_entry) / atrp_daily)
+var float low_since_entry = na // Initialize with 'na' to indicate it's not yet calculated
+if strategy.position_size < 0
+    entry_bar_index = bar_index[1] // Assuming entry_bar_index is declared elsewhere with the correct entry bar index
+    if bar_index - entry_bar_index <= target_bars
+        low_since_entry := lowest(low, bar_index - entry_bar_index + 1)
+        best_tp_deviation := math.min(nz(best_tp_deviation, 0), (entry_price - low_since_entry) / atrp_daily)
 
 // Calculate best_tp_deviation as a percentage of the daily ATRP
 best_tp_deviation_percentage := best_tp_deviation * 100
