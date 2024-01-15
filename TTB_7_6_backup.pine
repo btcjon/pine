@@ -297,8 +297,8 @@ if strategy.position_size == 0
 // Safety order (SO) levels calculation
 // Update best_tp_deviation for long positions within target_bars
 if strategy.position_size > 0 and i == 0 and bar_index - entry_bar_index <= target_bars
-   high_since_entry = highest(high, bar_index - entry_bar_index + 1)
-   best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
+    high_since_entry = highest(high, bar_index - entry_bar_index + 1)
+    best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
     // Long position logic
     atrp_price_deviation = atrp_daily * atrp_SO_deviation / max_safe_order
 
