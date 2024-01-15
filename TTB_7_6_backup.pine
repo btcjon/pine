@@ -225,8 +225,7 @@ if math.abs(strategy.position_size) != 0 and current_so[1] == 0
 
 
 // long entry
-if long
-    if bar_index > barsToWait and strategy.position_size == 0 and close > 0 and window and not no_trade_time and trigger == long_trigger
+if long and bar_index > barsToWait and strategy.position_size == 0 and close > 0 and window and not no_trade_time and trigger == long_trigger
     long_sequence_counter := long_sequence_counter + 1
     longId = "Long" + str.tostring(long_sequence_counter)
     _string_long = ""
@@ -251,8 +250,7 @@ if long
     log.info("#{0} - LE - SO#{1}  - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level {6}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_profit_level)
 
 // short entry
-else if short
-    if bar_index > barsToWait and strategy.position_size == 0 and close > 0 and window and not no_trade_time and trigger == short_trigger
+else if short and bar_index > barsToWait and strategy.position_size == 0 and close > 0 and window and not no_trade_time and trigger == short_trigger
     short_sequence_counter := short_sequence_counter + 1
     shortId = "Short" + str.tostring(short_sequence_counter)
     _string_short = ""
@@ -286,10 +284,9 @@ if strategy.position_size == 0
 
 // Safety order (SO) levels calculation
 // Update best_tp_deviation for long positions within target_bars
-if strategy.position_size > 0
-    if i == 0 and bar_index - entry_bar_index <= target_bars
-        high_since_entry = highest(high, bar_index - entry_bar_index + 1)
-        best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
+if strategy.position_size > 0 and i == 0 and bar_index - entry_bar_index <= target_bars
+    high_since_entry = highest(high, bar_index - entry_bar_index + 1)
+    best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
     // Long position logic
     atrp_price_deviation = atrp_daily * atrp_SO_deviation / max_safe_order
 

@@ -180,7 +180,7 @@ take_profit_level := avg_price * (1 + take_profit)
 take_S_profit_level := avg_price * (1 - take_S_profit)
 
 var float last_so_exec_price = na // Initialize with 'na' or the initial order price
-var float maxDevATRP = 0.0
+var float maxDevATRP = na // Initialize with 'na' to indicate it's not yet calculated
 
 // NO trade time
 no_trade_time = (hour(time) == 0 and minute(time) < 59)
@@ -207,6 +207,16 @@ atrp_price_S_deviation = atrp_daily * atrp_SO_deviation / max_S_safe_order
 //     maxSDev := int((maxSDev + atrp_price_S_deviation * 100 * math.pow(safe_S_order_step_scale, i)) * 100) / 100
 //     maxSDev
 
+// Calculate maxDevATRP within the correct scope
+if barstate.isnew
+    maxDevATRP := 0.0 // Reset maxDevATRP for the new bar calculation
+    for i = 1 to max_safe_order
+        so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i - 1)
+        maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
+    for i = 1 to max_S_safe_order
+        soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i - 1)
+        maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
+    maxDevATRP := round_to(maxDevATRP, 3) // Round maxDevATRP to 3 decimal places
 
 
 
@@ -273,7 +283,7 @@ else if short and
     last_so_bar := na
     //initial_S_atrp = atrps(close, atrp_length)
     total_qty_in_trade
-    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, maxDevATRP: {7}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, maxDevATRP)
+    log.info("#{0} - SE - SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Take Profit Level: {6}, atrp_price_deviation: {7}, safe_order_step_scale: {8}, maxDevATRP: {9}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, take_S_profit_level, atrp_price_deviation, safe_order_step_scale, maxDevATRP)
 longId = "Long" + str.tostring(long_sequence_counter)
 shortId = "Short" + str.tostring(short_sequence_counter)
 
@@ -361,7 +371,7 @@ if current_so > 0 and
     tradeCount += 1
     last_so_bar := bar_index // Update the bar index when an SO is executed
     last_so_exec_price := close
-    log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}, maxDevATRP: {10}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level, maxDevATRP)
+    log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}, atrp_price_deviation: {10}, safe_order_step_scale: {11}, atrp_daily: {12}, maxDevATRP: {13}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level, atrp_price_deviation, safe_order_step_scale, atrp_daily, maxDevATRP)
 
 order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
 
@@ -390,15 +400,6 @@ if current_so > 0 and
     last_so_bar := bar_index // Update the bar index when an SO is executed
     last_so_exec_price := close
     log.info("#{0} - S SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level: {9}, Last SO execution Price: {10}, maxDevATRP: {11}", short_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_S_order_lots * 100000), safe_S_order_volume_scale, safe_S_order_step_scale, take_profit_level, last_so_exec_price, maxDevATRP)
-
-
-for i = 0 to max_safe_order - 1
-    so_distance = atrp_price_deviation * math.pow(safe_order_step_scale, i)
-    maxDevATRP := math.max(maxDevATRP, so_distance / atrp_daily)
-
-for i = 0 to max_S_safe_order - 1
-    soS_distance = atrp_price_S_deviation * math.pow(safe_S_order_step_scale, i)
-    maxDevATRP := math.max(maxDevATRP, soS_distance / atrp_daily)
 
 
 // Take Profit! 

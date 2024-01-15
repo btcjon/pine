@@ -1,2 +1,0 @@
- - Tried to calculate `maxDevATRP` within the `if barstate.isnew` block to ensure it's updated on each new bar. This approach did not work because the calculation was based on variables that were not updated within the same scope, leading to reference errors.
- - Attempted to calculate `maxDevATRP` within the `if barstate.isnew` block, which led to reference errors due to variables not being updated within the same scope. This approach disrupted the strategy logic and required a revert to the last known good code.
