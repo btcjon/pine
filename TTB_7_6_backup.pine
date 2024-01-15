@@ -627,3 +627,31 @@ if strategy.position_size < 0 and bar_index - entry_bar_index <= target_bars
 // Calculate best_tp_deviation as a percentage of the daily ATRP
 best_tp_deviation_percentage := best_tp_deviation * 100
 plot(best_tp_deviation_percentage, title="Best TP Deviation ATRP", color=color.purple)
+// User input for target bars to track the best take profit deviation
+target_bars = input(20, title="Target Bars for Best TP Deviation")
+
+// Initialize variable to store the best take profit deviation
+var float best_tp_deviation = na
+var float best_tp_deviation_percentage = na // Initialize with 'na' to indicate it's not yet calculated
+
+// Reset best_tp_deviation at the start of a new trade round for longs
+if long and bar_index > barsToWait and strategy.position_size == 0 and close > 0 and window and not no_trade_time and trigger == long_trigger
+    best_tp_deviation := na
+
+// Reset best_tp_deviation at the start of a new trade round for shorts
+else if short and bar_index > barsToWait and strategy.position_size == 0 and close > 0 and window and not no_trade_time and trigger == short_trigger
+    best_tp_deviation := na
+
+// Update best_tp_deviation for long positions within target_bars
+if strategy.position_size > 0 and bar_index - entry_bar_index <= target_bars
+    high_since_entry = highest(high, bar_index - entry_bar_index + 1)
+    best_tp_deviation := math.max(nz(best_tp_deviation, 0), (high_since_entry - entry_price) / atrp_daily)
+
+// Update best_tp_deviation for short positions within target_bars
+if strategy.position_size < 0 and bar_index - entry_bar_index <= target_bars
+    low_since_entry = lowest(low, bar_index - entry_bar_index + 1)
+    best_tp_deviation := math.min(nz(best_tp_deviation, 0), (entry_price - low_since_entry) / atrp_daily)
+
+// Calculate best_tp_deviation as a percentage of the daily ATRP
+best_tp_deviation_percentage := best_tp_deviation * 100
+plot(best_tp_deviation_percentage, title="Best TP Deviation ATRP", color=color.purple)
