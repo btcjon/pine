@@ -190,9 +190,9 @@ var max_dev_atrp = 0.0
 var max_dev_date = 0
 var max_dev_month = 0
 
-var float dev_since_entry_points = na
+var float atrp_since_entry = na
 var float sum_atrp_since_entry = na
-var float average_dev_since_entry = na
+var float average_atrp_since_entry = na
 var float high_since_entry = na
 var float low_since_entry = na
 //end VARS
@@ -315,34 +315,27 @@ shortId = "Short" + str.tostring(short_sequence_counter)
 
 // ATRP_daily_factor Self-Optimizing
 // Update atrp_since_entry, high_since_entry, and low_since_entry for each bar after the entry
-if strategy.position_size > 0 and bar_index - entry_bar_index < target_bars
-    high_since_entry := math.max(high_since_entry, high)
-    dev_since_entry_points := high_since_entry - entry_price
-else if strategy.position_size < 0 and bar_index - entry_bar_index < target_bars
-    low_since_entry := math.min(low_since_entry, low)
-    dev_since_entry_points := entry_price - low_since_entry
+if strategy.position_size != 0 and bar_index - entry_bar_index < target_bars
+    atrp_since_entry := math.max(nz(atrp_since_entry, 0), (high_since_entry - entry_price) / atrp_daily, (entry_price - low_since_entry) / atrp_daily)
     high_since_entry := math.max(high_since_entry, high)
     low_since_entry := math.min(low_since_entry, low)
 
 // If the trade is closed or target_bars have passed, add the ATRP to sum_atrp_since_entry and reset atrp_since_entry
-if (strategy.position_size == 0 or bar_index - entry_bar_index >= target_bars) and na(dev_since_entry_points) == false
-    sum_dev_since_entry += dev_since_entry_points
-    dev_since_entry_points := na
+if (strategy.position_size == 0 or bar_index - entry_bar_index >= target_bars) and na(atrp_since_entry) == false
+    sum_atrp_since_entry += atrp_since_entry
+    atrp_since_entry := na
 
 // After a certain number of long trades (let's say 3), calculate the average and update your take profit level
-var int trade_counter = 0
-if strategy.position_size == 0
-    trade_counter := trade_counter + 1
-    if trade_counter >= trades_wait_optimize
-        average_dev_since_entry := sum_dev_since_entry / trade_counter
-        optimized_TP_factor := average_dev_since_entry * optimize_avg_factor / atrp_daily
-        ATRP_daily_factor := optimized_TP_factor
+if long_sequence_counter > trades_wait_optimize
+    average_atrp_since_entry := sum_atrp_since_entry / long_sequence_counter
+    ATRP_daily_factor := average_atrp_since_entry * optimize_avg_factor
 
 // After a certain number of short trades (let's say 3), calculate the average and update your take profit level
-// Remove the incorrect reference to average_atrp_since_entry
-// No replacement needed as the logic for short trades is not specified in the goal
+if short_sequence_counter > trades_wait_optimize
+    average_atrp_since_entry := sum_atrp_since_entry / short_sequence_counter
+    ATRP_daily_factor := average_atrp_since_entry * optimize_avg_factor
 
-plot(average_dev_since_entry, title="AVG Dev TP", color=#0dff00)
+plot(average_atrp_since_entry, title="AVG ATRP TP", color=#0dff00)
 plot(long_sequence_counter, title="Long Sequence Counter", color=color.red)
 plot(short_sequence_counter, title="Short Sequence Counter", color=color.blue)
 plot(sum_atrp_since_entry, title="Sum ATRP Since Entry", color=color.green)
@@ -762,7 +755,7 @@ if show_table
     if barstate.isconfirmed
         header2 = tbb2.R(0).TextColor(color.rgb(18, 247, 255)).TextSize(size.small).Font(font.family_monospace)
         header2.Text("", "") // Replace with your column headers
-        tbb2.R(1).TextColor(tableText).TextSize(size.small).Text("Net Profit", str.tostring(math.round(total_profit, 2)) + ' (' + str.tostring(math.round(net_profit_percentage, 2)) + '%)').BgColor(rowBG)
+        tbb2.R(1).TextColor(tableText).TextSize(size.small).Text("Net Profit", str.tostring(math.round(total_profit, 2)) + ' (' + str.tostring(math.round(net_profit_percentage, 2)) + '%)').Bg(rowBG)
         tbb2.R(2).TextColor(tableText).TextSize(size.small).Text("No SO", str.tostring(noSO)).Bg(rowBG)
         tbb2.R(3).TextColor(tableText).TextSize(size.small).Text("SO 1", str.tostring(SO1)).Bg(rowBG)
         tbb2.R(4).TextColor(tableText).TextSize(size.small).Text("SO 2", str.tostring(SO2)).Bg(rowBG)
