@@ -316,26 +316,29 @@ shortId = "Short" + str.tostring(short_sequence_counter)
 // ATRP_daily_factor Self-Optimizing
 // Update atrp_since_entry, high_since_entry, and low_since_entry for each bar after the entry
 if strategy.position_size != 0 and bar_index - entry_bar_index < target_bars
-    atrp_since_entry := math.max(nz(atrp_since_entry, 0), (high_since_entry - entry_price) / atrp_daily, (entry_price - low_since_entry) / atrp_daily)
-    high_since_entry := math.max(high_since_entry, high)
-    low_since_entry := math.min(low_since_entry, low)
+    high_since_entry := math.max(nz(high_since_entry, entry_price), high)
+    low_since_entry := math.min(nz(low_since_entry, entry_price), low)
+    dev_since_entry_points := strategy.position_size > 0 ? high_since_entry - entry_price : entry_price - low_since_entry
 
 // If the trade is closed or target_bars have passed, add the ATRP to sum_atrp_since_entry and reset atrp_since_entry
-if (strategy.position_size == 0 or bar_index - entry_bar_index >= target_bars) and na(atrp_since_entry) == false
-    sum_atrp_since_entry += atrp_since_entry
-    atrp_since_entry := na
+if (strategy.position_size == 0 or bar_index - entry_bar_index >= target_bars) and not na(dev_since_entry_points)
+    sum_dev_since_entry += dev_since_entry_points
+    dev_since_entry_points := na
 
 // After a certain number of long trades (let's say 3), calculate the average and update your take profit level
-if long_sequence_counter > trades_wait_optimize
-    average_atrp_since_entry := sum_atrp_since_entry / long_sequence_counter
-    ATRP_daily_factor := average_atrp_since_entry * optimize_avg_factor
+if long_sequence_counter >= trades_wait_optimize
+    average_dev_since_entry := sum_dev_since_entry / long_sequence_counter
+    optimized_TP_factor := average_dev_since_entry * optimize_avg_factor / atrp_daily
+    ATRP_daily_factor := optimized_TP_factor
 
 // After a certain number of short trades (let's say 3), calculate the average and update your take profit level
-if short_sequence_counter > trades_wait_optimize
-    average_atrp_since_entry := sum_atrp_since_entry / short_sequence_counter
-    ATRP_daily_factor := average_atrp_since_entry * optimize_avg_factor
+// The logic for short trades optimization is not specified in the goal, so it's assumed to be similar to long trades
+if short_sequence_counter >= trades_wait_optimize
+    average_dev_since_entry := sum_dev_since_entry / short_sequence_counter
+    optimized_TP_factor := average_dev_since_entry * optimize_avg_factor / atrp_daily
+    ATRP_daily_factor := optimized_TP_factor
 
-plot(average_atrp_since_entry, title="AVG ATRP TP", color=#0dff00)
+plot(average_dev_since_entry, title="AVG Dev TP", color=#0dff00)
 plot(long_sequence_counter, title="Long Sequence Counter", color=color.red)
 plot(short_sequence_counter, title="Short Sequence Counter", color=color.blue)
 plot(sum_atrp_since_entry, title="Sum ATRP Since Entry", color=color.green)
