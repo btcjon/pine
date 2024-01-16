@@ -339,9 +339,8 @@ if strategy.position_size == 0
         ATRP_daily_factor := optimized_TP_factor
 
 // After a certain number of short trades (let's say 3), calculate the average and update your take profit level
-if short_sequence_counter > trades_wait_optimize
-    average_atrp_since_entry := sum_atrp_since_entry / short_sequence_counter
-    ATRP_daily_factor := average_atrp_since_entry * optimize_avg_factor
+// Remove the incorrect reference to average_atrp_since_entry
+// No replacement needed as the logic for short trades is not specified in the goal
 
 plot(average_dev_since_entry, title="AVG Dev TP", color=#0dff00)
 plot(long_sequence_counter, title="Long Sequence Counter", color=color.red)
@@ -763,7 +762,7 @@ if show_table
     if barstate.isconfirmed
         header2 = tbb2.R(0).TextColor(color.rgb(18, 247, 255)).TextSize(size.small).Font(font.family_monospace)
         header2.Text("", "") // Replace with your column headers
-        tbb2.R(1).TextColor(tableText).TextSize(size.small).Text("Net Profit", str.tostring(math.round(total_profit, 2)) + ' (' + str.tostring(math.round(net_profit_percentage, 2)) + '%)').Bg(rowBG)
+        tbb2.R(1).TextColor(tableText).TextSize(size.small).Text("Net Profit", str.tostring(math.round(total_profit, 2)) + ' (' + str.tostring(math.round(net_profit_percentage, 2)) + '%)').BgColor(rowBG)
         tbb2.R(2).TextColor(tableText).TextSize(size.small).Text("No SO", str.tostring(noSO)).Bg(rowBG)
         tbb2.R(3).TextColor(tableText).TextSize(size.small).Text("SO 1", str.tostring(SO1)).Bg(rowBG)
         tbb2.R(4).TextColor(tableText).TextSize(size.small).Text("SO 2", str.tostring(SO2)).Bg(rowBG)
