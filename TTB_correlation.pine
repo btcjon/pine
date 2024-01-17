@@ -335,7 +335,7 @@ corner_txt_col = input.color(#FFFFFF, '', group='Matrix', inline='Corr. Length')
 col_bord = input.color(#363A45, 'Border Color', group='Matrix')
 width_bord = input.int(1, 'Border Width', 0, group='Matrix')
 m_transp = input.int(0, 'Transparency', 0, 100, group='Matrix')
-input_tab_size = input.string('Normal', 'Size', group='Matrix', options=['Auto', 'Tiny', 'Small', 'Normal', 'Large', 'Huge'])
+input_tab_size = input.string('Tiny', 'Size', group='Matrix', options=['Auto', 'Tiny', 'Small', 'Normal', 'Large', 'Huge'])
 tab_size = switch input_tab_size
     'Auto'   => size.auto
     'Tiny'   => size.tiny
