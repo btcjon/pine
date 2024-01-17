@@ -296,6 +296,28 @@ col_lvl__4 = input.color(color.new(#5B9CF6, 80), ' -4 ', group='Levels', inlin
 	//Menu
 //expand to handle 29 symbols
 prec = input.int(3, 'Precision', 1, 4, group='Matrix')
+data_10 = request.security(sym_10, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_11 = request.security(sym_11, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_12 = request.security(sym_12, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+// ... continue for data_13 through data_29
+c1_10 = ta.correlation(data_1, data_10, len)
+c1_11 = ta.correlation(data_1, data_11, len)
+c1_12 = ta.correlation(data_1, data_12, len)
+// ... continue for c1_13 through c1_29
+// ... continue for c2_10 through c2_29, c3_10 through c3_29, etc.
+// ... continue for c28_29
+
+// Update the table plotting logic to include symbols 10 through 29
+_sym(0, 10, sym_10, col_txt_10, col_10)
+_sym(0, 11, sym_11, col_txt_11, col_11)
+_sym(0, 12, sym_12, col_txt_12, col_12)
+// ... continue for _sym calls for symbols 13 through 29
+_corr(1, 10, c1_10, c1_10)
+_corr(1, 11, c1_11, c1_11)
+_corr(1, 12, c1_12, c1_12)
+// ... continue for _corr calls for correlations involving symbols 10 through 29
+// ... continue for _empty calls if fill_cell is true
+// ... continue for table.cell calls if fill_corner is true
 col_txt_1 = input.color(#FFFFFF, 'Text Colors   1', group='Matrix', inline='Line 1')
 col_txt_2 = input.color(#FFFFFF, '  2', group='Matrix', inline='Line 1')
 col_txt_3 = input.color(#4CAF50, '  3', group='Matrix', inline='Line 1')
