@@ -1,0 +1,351 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © thetradingbot
+
+//@version=5
+indicator('TTB Correlation', 'TTB Correlation', precision=3)
+
+
+if session.ispremarket
+	runtime.error('The indicator only works in regular session.')
+
+
+
+///////////////////////////
+//                       //
+//      Correlation      //
+//                       //
+///////////////////////////
+
+	//Menu
+len = input.int(20, 'Length', 1, group='Correlation')
+tf = input.timeframe('', 'Timeframe', group='Correlation')
+gaps = input.bool(true, 'Gaps', group='Correlation', tooltip='If not checked, gaps are filled with the latest available value.')
+in_style = input.string('Line with breaks', 'Style', options=['Line', 'Line with breaks', 'Step line', 'Step line with diamonds', 'Cross', 'Circles'], group='Correlation')
+style = switch in_style
+	'Line' => plot.style_line
+	'Line with breaks' => plot.style_linebr
+	'Step line' => plot.style_stepline
+	'Step line with diamonds' => plot.style_stepline_diamond
+	'Cross' => plot.style_cross
+	'Circles' => plot.style_circles
+show_1 = input.bool(true, '', group='Reference', inline='Line 0')
+show_2 = input.bool(true, '1', group='Symbols', inline= 'Line 1')
+show_3 = input.bool(true, '2', group='Symbols', inline= 'Line 2')
+show_4 = input.bool(true, '3', group='Symbols', inline= 'Line 3')
+show_5 = input.bool(true, '4', group='Symbols', inline= 'Line 4')
+show_6 = input.bool(true, '5', group='Symbols', inline= 'Line 5')
+show_7 = input.bool(true, '6', group='Symbols', inline= 'Line 6')
+show_8 = input.bool(true, '7', group='Symbols', inline= 'Line 7')
+show_9 = input.bool(true, '8', group='Symbols', inline= 'Line 8')
+//expand to handle 29 symbols
+col_1 = input.color(#FF0000, '  ', group='Reference', inline='Line 0')
+col_2 = input.color(#2962FF, '', group='Symbols', inline='Line 1')
+col_3 = input.color(#FFFFFF, '', group='Symbols', inline='Line 2')
+col_4 = input.color(#880E4F, '', group='Symbols', inline='Line 3')
+col_5 = input.color(#FA6496, '', group='Symbols', inline='Line 4')
+col_6 = input.color(#D79B24, '', group='Symbols', inline='Line 5')
+col_7 = input.color(#787B86, '', group='Symbols', inline='Line 6')
+col_8 = input.color(#19965A, '', group='Symbols', inline='Line 7')
+col_9 = input.color(#23AADC, '', group='Symbols', inline='Line 8')
+//expand to handle 29 symbols
+line_1 = input.int(1, '', 1, 4, group='Reference', inline='Line 0')
+line_2 = input.int(1, '', 1, 4, group='Symbols', inline='Line 1')
+line_3 = input.int(1, '', 1, 4, group='Symbols', inline='Line 2')
+line_4 = input.int(1, '', 1, 4, group='Symbols', inline='Line 3')
+line_5 = input.int(1, '', 1, 4, group='Symbols', inline='Line 4')
+line_6 = input.int(1, '', 1, 4, group='Symbols', inline='Line 5')
+line_7 = input.int(1, '', 1, 4, group='Symbols', inline='Line 6')
+line_8 = input.int(1, '', 1, 4, group='Symbols', inline='Line 7')
+line_9 = input.int(1, '', 1, 4, group='Symbols', inline='Line 8')
+//expand to handle 29 symbols
+//replace the symbols with: PEPPERSTONE:AUDCAD,PEPPERSTONE:AUDCHF,PEPPERSTONE:AUDJPY,PEPPERSTONE:AUDNZD,PEPPERSTONE:AUDUSD,PEPPERSTONE:CADCHF,PEPPERSTONE:CADJPY,PEPPERSTONE:CHFJPY,PEPPERSTONE:EURAUD,PEPPERSTONE:EURCAD,PEPPERSTONE:EURCHF,PEPPERSTONE:EURGBP,PEPPERSTONE:EURJPY,PEPPERSTONE:EURNZD,PEPPERSTONE:EURUSD,PEPPERSTONE:GBPAUD,PEPPERSTONE:GBPCAD,PEPPERSTONE:GBPCHF,PEPPERSTONE:GBPJPY,PEPPERSTONE:GBPNZD,PEPPERSTONE:GBPUSD,PEPPERSTONE:NAS100,PEPPERSTONE:NZDCAD,PEPPERSTONE:NZDCHF,PEPPERSTONE:NZDJPY,PEPPERSTONE:NZDUSD,PEPPERSTONE:USDCAD,PEPPERSTONE:USDCHF,PEPPERSTONE:USDJPY
+sym_1 = input.symbol('AMEX:SPY', '', group='Reference', inline='Line 0')
+sym_2 = input.symbol('NASDAQ:QQQ', '', group='Symbols', inline= 'Line 1')
+sym_3 = input.symbol('AMEX:DIA', '', group='Symbols', inline= 'Line 2')
+sym_4 = input.symbol('AMEX:IWM', '', group='Symbols', inline= 'Line 3')
+sym_5 = input.symbol('AMEX:MDY', '', group='Symbols', inline= 'Line 4')
+sym_6 = input.symbol('AMEX:GLD', '', group='Symbols', inline= 'Line 5')
+sym_7 = input.symbol('AMEX:USO', '', group='Symbols', inline= 'Line 6')
+sym_8 = input.symbol('AMEX:UUP', '', group='Symbols', inline= 'Line 7')
+sym_9 = input.symbol('NASDAQ:IEF', '', group='Symbols', inline= 'Line 8')
+
+	//Variables
+//expand to handle 29 symbols
+data_1 = request.security(sym_1, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_2 = request.security(sym_2, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_3 = request.security(sym_3, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_4 = request.security(sym_4, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_5 = request.security(sym_5, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_6 = request.security(sym_6, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_7 = request.security(sym_7, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_8 = request.security(sym_8, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+data_9 = request.security(sym_9, tf, close, gaps ? barmerge.gaps_on : barmerge.gaps_off)
+//expand to handle 29 symbols
+c1_1 = ta.correlation(data_1, data_1, len)
+c1_2 = ta.correlation(data_1, data_2, len)
+c1_3 = ta.correlation(data_1, data_3, len)
+c1_4 = ta.correlation(data_1, data_4, len)
+c1_5 = ta.correlation(data_1, data_5, len)
+c1_6 = ta.correlation(data_1, data_6, len)
+c1_7 = ta.correlation(data_1, data_7, len)
+c1_8 = ta.correlation(data_1, data_8, len)
+c1_9 = ta.correlation(data_1, data_9, len)
+c2_3 = ta.correlation(data_2, data_3, len)
+c2_4 = ta.correlation(data_2, data_4, len)
+c2_5 = ta.correlation(data_2, data_5, len)
+c2_6 = ta.correlation(data_2, data_6, len)
+c2_7 = ta.correlation(data_2, data_7, len)
+c2_8 = ta.correlation(data_2, data_8, len)
+c2_9 = ta.correlation(data_2, data_9, len)
+c3_4 = ta.correlation(data_3, data_4, len)
+c3_5 = ta.correlation(data_3, data_5, len)
+c3_6 = ta.correlation(data_3, data_6, len)
+c3_7 = ta.correlation(data_3, data_7, len)
+c3_8 = ta.correlation(data_3, data_8, len)
+c3_9 = ta.correlation(data_3, data_9, len)
+c4_5 = ta.correlation(data_4, data_5, len)
+c4_6 = ta.correlation(data_4, data_6, len)
+c4_7 = ta.correlation(data_4, data_7, len)
+c4_8 = ta.correlation(data_4, data_8, len)
+c4_9 = ta.correlation(data_4, data_9, len)
+c5_6 = ta.correlation(data_5, data_6, len)
+c5_7 = ta.correlation(data_5, data_7, len)
+c5_8 = ta.correlation(data_5, data_8, len)
+c5_9 = ta.correlation(data_5, data_9, len)
+c6_7 = ta.correlation(data_6, data_7, len)
+c6_8 = ta.correlation(data_6, data_8, len)
+c6_9 = ta.correlation(data_6, data_9, len)
+c7_8 = ta.correlation(data_7, data_8, len)
+c7_9 = ta.correlation(data_7, data_9, len)
+c8_9 = ta.correlation(data_8, data_9, len)
+
+	//Plot
+//expand to handle 29 symbols
+// plot(show_1 ? c1_1 : na, '', col_1, line_1, style, editable=false)
+// plot(show_2 ? c1_2 : na, '', col_2, line_2, style, editable=false)
+// plot(show_3 ? c1_3 : na, '', col_3, line_3, style, editable=false)
+// plot(show_4 ? c1_4 : na, '', col_4, line_4, style, editable=false)
+// plot(show_5 ? c1_5 : na, '', col_5, line_5, style, editable=false)
+// plot(show_6 ? c1_6 : na, '', col_6, line_6, style, editable=false)
+// plot(show_7 ? c1_7 : na, '', col_7, line_7, style, editable=false)
+// plot(show_8 ? c1_8 : na, '', col_8, line_8, style, editable=false)
+// plot(show_9 ? c1_9 : na, '', col_9, line_9, style, editable=false)
+
+
+
+////////////////////////////
+//                        //
+//       Thresholds       //
+//                        //
+////////////////////////////
+
+	//Menu
+// col_th = input.color(color.new(#FFFFFF, 70), 'Color   ', group='Thresholds', inline='Color')
+// in_style_th =  input.string('Dotted', 'Style   ', options=['Solid', 'Dotted', 'Dashed'], group='Thresholds', inline='Style')
+// style_th = switch in_style_th
+// 	'Solid' => hline.style_solid
+// 	'Dotted' => hline.style_dotted
+// 	'Dashed' => hline.style_dashed
+// width_th = input.int(1, 'Width  ', 1, 4, group='Thresholds', inline='Width')
+// show_th_4 = input.bool(false, '', group='Thresholds', inline='Line 4')
+// show_th_3 = input.bool(false, '', group='Thresholds', inline='Line 3')
+// show_th_2 = input.bool(false, '', group='Thresholds', inline='Line 2')
+// show_th_1 = input.bool(false, '', group='Thresholds', inline='Line 1')
+// show_th_0 = input.bool(false, '', group='Thresholds', inline='Line 0')
+// show_th__1 = input.bool(false, '', group='Thresholds', inline='Line -1')
+// show_th__2 = input.bool(false, '', group='Thresholds', inline='Line -2')
+// show_th__3 = input.bool(false, '', group='Thresholds', inline='Line -3')
+// show_th__4 = input.bool(false, '', group='Thresholds', inline='Line -4')
+// th_4 = input.float(1, '4 ', 1.00, 1.00, group='Thresholds', inline='Line 4', tooltip='Matrix cells\' background will change accordingly to threshold levels. Level 4, 0 and -4 cannot be changed.')
+th_3 = input.float(0.7, '3 ', -1.00, 1.00, 0.001, group='Thresholds', inline='Line 3')
+th_2 = input.float(0.5, '2 ', -1.00, 1.00, 0.001, group='Thresholds', inline='Line 2')
+th_1 = input.float(0.3, '1 ', -1.00, 1.00, 0.001, group='Thresholds', inline='Line 1')
+th_0 = input.float(0, '0 ', 0, 0, group='Thresholds', inline='Line 0')
+th__1 = input.float(-0.3, '-1', -1.00, 1.00, 0.001, group='Thresholds', inline='Line -1')
+th__2 = input.float(-0.5, '-2', -1.00, 1.00, 0.001, group='Thresholds', inline='Line -2')
+th__3 = input.float(-0.7, '-3', -1.00, 1.00, step=0.001, group='Thresholds', inline='Line -3')
+th__4 = input.float(-1, '-4', -1.00, -1.00, group='Thresholds', inline='Line -4')
+
+// 	//Plot
+// h4 = hline(th_4, '', col_th, style_th, width_th, false, show_th_4 ? display.all : display.none)
+// h3 = hline(th_3, '', col_th, style_th, width_th, false, show_th_3 ? display.all : display.none)
+// h2 = hline(th_2, '', col_th, style_th, width_th, false, show_th_2 ? display.all : display.none)
+// h1 = hline(th_1, '', col_th, style_th, width_th, false, show_th_1 ? display.all : display.none)
+// h0 = hline(th_0, '', col_th, style_th, width_th, false, show_th_0 ? display.all : display.none)
+// h_1 = hline(th__1, '', col_th, style_th, width_th, false, show_th__1 ? display.all : display.none)
+// h_2 = hline(th__2, '', col_th, style_th, width_th, false, show_th__2 ? display.all : display.none)
+// h_3 = hline(th__3, '', col_th, style_th, width_th, false, show_th__3 ? display.all : display.none)
+// h_4 = hline(th__4, '', col_th, style_th, width_th, false, show_th__4 ? display.all : display.none)
+
+
+
+////////////////////////////
+//                        //
+//         Levels         //
+//                        //
+////////////////////////////
+
+	//Menu
+hide_lvl = input.bool(false, 'Hide', group='Levels')
+col_lvl_4 = input.color(color.new(#4CAF50, 80), ' 4  ', group='Levels', inline='Line 1')
+col_lvl_3 = input.color(color.new(#FFEB3B, 80), '  3 ', group='Levels', inline='Line 1')
+col_lvl_2 = input.color(color.new(#FF5252, 80), '  2 ', group='Levels', inline='Line 1')
+col_lvl_1 = input.color(color.new(#D1D4DC, 80), '  1  ', group='Levels', inline='Line 1', tooltip='Matrix cells\' background will change accordingly to level colors.')
+col_lvl__1 = input.color(color.new(#878479, 80), ' -1 ', group='Levels', inline='Line 2')
+col_lvl__2 = input.color(color.new(#B350AF, 80), ' -2 ', group='Levels', inline='Line 2')
+col_lvl__3 = input.color(color.new(#F57C00, 80), ' -3 ', group='Levels', inline='Line 2')
+col_lvl__4 = input.color(color.new(#5B9CF6, 80), ' -4 ', group='Levels', inline='Line 2')
+
+// 	//Plot
+// fill(h4, h3, hide_lvl ? na : col_lvl_4, '', false)
+// fill(h3, h2, hide_lvl ? na : col_lvl_3, '', false)
+// fill(h2, h1, hide_lvl ? na : col_lvl_2, '', false)
+// fill(h1, h0, hide_lvl ? na : col_lvl_1, '', false)
+// fill(h0, h_1, hide_lvl ? na : col_lvl__1, '', false)
+// fill(h_1, h_2, hide_lvl ? na : col_lvl__2, '', false)
+// fill(h_2, h_3, hide_lvl ? na : col_lvl__3, '', false)
+// fill(h_3, h_4, hide_lvl ? na : col_lvl__4, '', false)
+
+
+
+//////////////////////////
+//                      //
+//        Matrix        //
+//                      //
+//////////////////////////
+
+	//Menu
+//expand to handle 29 symbols
+prec = input.int(3, 'Precision', 1, 4, group='Matrix')
+col_txt_1 = input.color(#FFFFFF, 'Text Colors   1', group='Matrix', inline='Line 1')
+col_txt_2 = input.color(#FFFFFF, '  2', group='Matrix', inline='Line 1')
+col_txt_3 = input.color(#4CAF50, '  3', group='Matrix', inline='Line 1')
+col_txt_4 = input.color(#FFFFFF, '  4', group='Matrix', inline='Line 1')
+col_txt_5 = input.color(#000000, '    5', group='Matrix', inline='Line 2')
+col_txt_6 = input.color(#FFFFFF, '  6', group='Matrix', inline='Line 2')
+col_txt_7 = input.color(#000000, '  7', group='Matrix', inline='Line 2')
+col_txt_8 = input.color(#FFFFFF, '  8', group='Matrix', inline='Line 2')
+col_txt_9 = input.color(#000000, '  9', group='Matrix', inline='Line 2')
+col_num = input.color(#000000, 'Numbers Color', group='Matrix')
+fill_cell = input.bool(false, 'Fill Empty Cells', group='Matrix', inline='Fill')
+empty_col = input.color(#363A45, '', group='Matrix', inline='Fill')
+fill_corner = input.bool(false, 'Fill Corner Cell', group='Matrix', inline='Corner')
+corner_col = input.color(#363A45, '', group='Matrix', inline='Corner')
+corr_corner = input.bool(false, 'Corr. Length on Corner Cell', group='Matrix', inline='Corr. Length')
+corner_txt_col = input.color(#FFFFFF, '', group='Matrix', inline='Corr. Length')
+col_bord = input.color(#363A45, 'Border Color', group='Matrix')
+width_bord = input.int(1, 'Border Width', 0, group='Matrix')
+m_transp = input.int(0, 'Transparency', 0, 100, group='Matrix')
+input_tab_size = input.string('Normal', 'Size', group='Matrix', options=['Auto', 'Tiny', 'Small', 'Normal', 'Large', 'Huge'])
+tab_size = switch input_tab_size
+    'Auto'   => size.auto
+    'Tiny'   => size.tiny
+    'Small'  => size.small
+    'Normal' => size.normal
+    'Large'  => size.large
+    'Huge'   => size.huge
+input_tab_pos = input.string('Bottom Left', 'Position', group='Matrix', options=['Top Left', 'Top Center', 'Top Right', 'Middle Left', 'Middle Center', 'Middle Right', 'Bottom Left', 'Bottom Center', 'Bottom Right'])
+tab_pos = switch input_tab_pos
+    'Top Left' => position.top_left
+	'Top Center' => position.top_center
+    'Top Right' => position.top_right
+	'Middle Left' => position.middle_left
+	'Middle Center' => position.middle_center
+	'Middle Right' => position.middle_right
+    'Bottom Left'  => position.bottom_left
+    'Bottom Center' => position.bottom_center
+    'Bottom Right' => position.bottom_right
+
+	//Variables
+//expand to handle 29 symbols
+bg_col(c) =>
+	if c >= th_3
+		color.new(col_lvl_4, m_transp)
+	else if c >= th_2 and c < th_3
+		color.new(col_lvl_3, m_transp)
+	else if c >= th_1 and c < th_2
+		color.new(col_lvl_2, m_transp)
+	else if c > th_0 and c < th_1
+		color.new(col_lvl_1, m_transp)
+	else if c == th_0
+		color.new(#FFFFFF, m_transp)
+	else if c < th_0 and c > th__1
+		color.new(col_lvl__1, m_transp)
+	else if c <= th__1 and c > th__2
+		color.new(col_lvl__2, m_transp)
+	else if c <= th__2 and c > th__3
+		color.new(col_lvl__3, m_transp)
+	else if c <= th__3
+		color.new(col_lvl__4, m_transp)
+get_name(_str) =>
+	string[] _pair = str.split(_str, ':')
+	string[] _chars = str.split(array.get(_pair, 1), '')
+	string _return = array.join(_chars, '')
+tab = table.new(tab_pos, 10, 10, border_color=color.new(col_bord, m_transp), border_width=width_bord)
+_sym(cell_1, cell_2, txt, col, bgcol) =>
+	table.cell(tab, cell_1, cell_2, get_name(txt), text_color=color.new(col, m_transp), text_size=tab_size, bgcolor=color.new(bgcol, m_transp))
+	table.cell(tab, cell_2, cell_1, get_name(txt), text_color=color.new(col, m_transp), text_size=tab_size, bgcolor=color.new(bgcol, m_transp))
+_corr(cell_1, cell_2, txt, bgcol) =>
+	table.cell(tab, cell_1, cell_2, str.tostring(txt, prec == 4 ? '#.####' : prec == 3 ? '#.###' : prec == 2 ? '#.##' : '#.#'), text_color= color.new(col_num, m_transp), text_size=tab_size, bgcolor=bg_col(bgcol))
+	table.cell(tab, cell_2, cell_1, str.tostring(txt, prec == 4 ? '#.####' : prec == 3 ? '#.###' : prec == 2 ? '#.##' : '#.#'), text_color= color.new(col_num, m_transp), text_size=tab_size, bgcolor=bg_col(bgcol))
+_empty(colm, row) =>
+	table.cell(tab, colm, row, '', bgcolor=color.new(empty_col, m_transp))
+
+	//Plot
+//expand to handle 29 symbols
+_sym(0, 1, sym_1, col_txt_1, col_1)
+_sym(0, 2, sym_2, col_txt_2, col_2)
+_sym(0, 3, sym_3, col_txt_3, col_3)
+_sym(0, 4, sym_4, col_txt_4, col_4)
+_sym(0, 5, sym_5, col_txt_5, col_5)
+_sym(0, 6, sym_6, col_txt_6, col_6)
+_sym(0, 7, sym_7, col_txt_7, col_7)
+_sym(0, 8, sym_8, col_txt_8, col_8)
+_sym(0, 9, sym_9, col_txt_9, col_9)
+_corr(1, 2, c1_2, c1_2)
+_corr(1, 3, c1_3, c1_3)
+_corr(1, 4, c1_4, c1_4)
+_corr(1, 5, c1_5, c1_5)
+_corr(1, 6, c1_6, c1_6)
+_corr(1, 7, c1_7, c1_7)
+_corr(1, 8, c1_8, c1_8)
+_corr(1, 9, c1_9, c1_9)
+_corr(2, 3, c2_3, c2_3)
+_corr(2, 4, c2_4, c2_4)
+_corr(2, 5, c2_5, c2_5)
+_corr(2, 6, c2_6, c2_6)
+_corr(2, 7, c2_7, c2_7)
+_corr(2, 8, c2_8, c2_8)
+_corr(2, 9, c2_9, c2_9)
+_corr(3, 4, c3_4, c3_4)
+_corr(3, 5, c3_5, c3_5)
+_corr(3, 6, c3_6, c3_6)
+_corr(3, 7, c3_7, c3_7)
+_corr(3, 8, c3_8, c3_8)
+_corr(3, 9, c3_9, c3_9)
+_corr(4, 5, c4_5, c4_5)
+_corr(4, 6, c4_6, c4_6)
+_corr(4, 7, c4_7, c4_7)
+_corr(4, 8, c4_8, c4_8)
+_corr(4, 9, c4_9, c4_9)
+_corr(5, 6, c5_6, c5_6)
+_corr(5, 7, c5_7, c5_7)
+_corr(5, 8, c5_8, c5_8)
+_corr(5, 9, c5_9, c5_9)
+_corr(6, 7, c6_7, c6_7)
+_corr(6, 8, c6_8, c6_8)
+_corr(6, 9, c6_9, c6_9)
+_corr(7, 8, c7_8, c7_8)
+_corr(7, 9, c7_9, c7_9)
+_corr(8, 9, c8_9, c8_9)
+if fill_cell
+	_empty(1, 1)
+	_empty(2, 2)
+	_empty(3, 3)
+	_empty(4, 4)
+	_empty(5, 5)
+	_empty(6, 6)
+	_empty(7, 7)
+	_empty(8, 8)
+	_empty(9, 9)
+table.cell(tab, 0, 0, corr_corner ? 'r[' + str.tostring(len) + ']' : na, text_color=color.new(corner_txt_col, m_transp), text_size=tab_size, bgcolor=color.new(corner_col, fill_corner ? m_transp : 100))

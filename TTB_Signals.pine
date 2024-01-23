@@ -1101,7 +1101,9 @@ plot(the_trend, title="chart trend", color=color.rgb(76, 175, 79, 94))
 // Define invisible plots for high and low
 plot_high = plot(high, color=na)
 plot_low = plot(low, color=na)
-// Determine if the price is above or below the HTF2 trailing stop
+// Determine if the price is above or below the trailing stop
+price_above_ts_htf1 = close > ts_htf1
+price_below_ts_htf1 = close < ts_htf1
 price_above_ts_htf2 = close > ts_htf2
 price_below_ts_htf2 = close < ts_htf2
 // Calculate midpoints
@@ -1116,6 +1118,8 @@ color bullishGradientTop = color.new(#08c9f0, 100)
 color bullishGradientBottom = color.new(#03d5fe, 80) 
 color bearishGradientTop = color.new(#fe02fe, 80) 
 color bearishGradientBottom = color.new(#f608f6, 100) 
+fill(plot_ts_htf1, plot_midpoint_candle, price_above_ts_htf1 ? ts_htf2 : na, high, bullishGradientTop, bullishGradientBottom)
+fill(plot_ts_htf1, plot_midpoint_candle, price_below_ts_htf1 ? low : na, ts_htf2, bearishGradientTop, bearishGradientBottom)
 fill(plot_ts_htf2, plot_midpoint_candle, price_above_ts_htf2 ? ts_htf2 : na, high, bullishGradientTop, bullishGradientBottom)
 fill(plot_ts_htf2, plot_midpoint_candle, price_below_ts_htf2 ? low : na, ts_htf2, bearishGradientTop, bearishGradientBottom)
 

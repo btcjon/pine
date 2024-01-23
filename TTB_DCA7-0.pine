@@ -545,7 +545,7 @@ if strategy.position_size == 0
     S_threshold
 
 
-//Safety order levels
+// Safety order levels 
 if strategy.position_size > 0 and i == 0
     if safe_order_step_scale == 1.0
         threshold := initial_order - initial_order * price_deviation * safe_order_step_scale * safe_order_step_scale_Multiplier * current_so
@@ -562,6 +562,7 @@ else if strategy.position_size < 0 and i == 0
     else
         S_threshold := initial_S_order * (1 + price_S_deviation * (math.pow(safe_S_order_step_scale * safe_order_step_scale_Multiplier, current_so) - 1) / (safe_S_order_step_scale - 1))
         S_threshold
+
 
 
 // Long SO (Average Down)
