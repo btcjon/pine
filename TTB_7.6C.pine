@@ -1,8 +1,9 @@
 //@version=5
 
-strategy('TTB 7.6', overlay=true, initial_capital=1000000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false, max_bars_back=5000)
+strategy('TTB 7.6C', overlay=true, initial_capital=1000, default_qty_type=strategy.cash, default_qty_value=100000, currency=currency.USD, pyramiding=999, calc_on_every_tick=false, max_bars_back=5000)
 
 import thetradingbot/TTB_TableBuilder/1 as TTBTableBuilder
+
 
 //main colors
 color bullish = #00a2ff
@@ -25,6 +26,9 @@ start = input.time(timestamp("1 Feb 2021 12:00"), title="Start")
 finish = input.time(timestamp("1 Feb 2025 12:00"), title="End")
 window = time >= start and time <= finish ? true : false  
 source_type = 'Close'
+// ID = 6700960415957
+// version = input(defval='7-6', title='version')
+// test = input(defval='1', title='test')
 
 truncate(number, decimals) =>
     factor = math.pow(10, decimals)
@@ -46,81 +50,126 @@ else if direction == 'Short'
     short := true
     short
 
-// Strategy Inputs
-ID = 6700960415957
-version = input(defval='7-6', title='version')
-test = input(defval='1', title='test')
-barsToWait = input(500, title="Bars Wait to Start")
+// Entry Inputs
+Entryinputgrouptitle = "Entry Inputs"
+initial_capital = input.float(1000.0, title="Initial Capital", minval=0.0, group = Entryinputgrouptitle)
+barsToWait = input(500, title="Bars Wait to Start", group = Entryinputgrouptitle)
 direction_text = direction == 'Long' ? 'L' : 'S'
-long_trigger = input(title='Long trigger value', defval=1)
-short_trigger = input(title='Short trigger value', defval=-1)
-trigger = input(title='Enter trigger', defval=close)
-MinSOBars = input(100, title="Min Bars Between SOs")
-percent_price_deviation = input.float(0.07, title='Percent Price deviation to open safety orders (%)', step=0.01, minval=0.01) / 100
-percent_take_profit = input.float(0.08, title='Percent Take Profit (%)', step=0.01, minval=0.01) / 100
-base_lots = input.float(0.4, title='Base Order Size (Lots)', step=0.01)
-safe_lots = input.float(0.4, title='Safe Order Size (Lots)', step=0.01)
-safe_volume_scale = input.float(1.1, step=0.1, title='Safety order volume scale')
-safe_step_scale = input.float(1.6, step=0.1, title='Safety order step scale')
+long_trigger = input(title='Long trigger value', defval=1, group = Entryinputgrouptitle)
+short_trigger = input(title='Short trigger value', defval=-1, group = Entryinputgrouptitle)
+trigger = input(title='Enter trigger', defval=close, group = Entryinputgrouptitle)
+
+// SO Inputs
+SOinputgrouptitle = "SO Inputs"
+percent_price_deviation = input.float(0.5, title='Percent Price deviation to open safety orders (%)', step=0.01, minval=0.01, group = SOinputgrouptitle) / 100
+
+
+// base_lots = input.float(1, title='Base Order Size (Lots)', step=0.01, group = SOinputgrouptitle)
+// safe_lots = input.float(1, title='Safe Order Size (Lots)', step=0.01, group = SOinputgrouptitle)
+
+// Input for percentage of initial capital
+base_lots_percent = input.float(10, title='Base Order Size (% of Initial Capital)', step=0.01) / 100
+safe_lots_percent = input.float(10, title='Safe Order Size (% of Initial Capital)', step=0.01) / 100
+
+// Calculate the dollar value to invest
+dollar_value_base = initial_capital * base_lots_percent
+dollar_value_safe = initial_capital * safe_lots_percent
+
+rounded_close = math.round(close * 1000) / 1000
+
+asset_quantity_base = math.round((dollar_value_base / rounded_close) * 1000) / 1000
+asset_quantity_safe = math.round((dollar_value_safe / rounded_close) * 1000) / 1000
+
+//SOMaxLots = input(3.0, title="Max Lots for Safety Orders")
+//safe_volume_scale = input.float(1.2, step=0.1, title='Safety order volume scale', group = SOinputgrouptitle)
+//SOmaxPercentage = input(2.0, title="Max Percentage for Safety Orders", group = SOinputgrouptitle) / 100
+safe_step_scale = input.float(1.5, step=0.1, title='Safety order step scale', group = SOinputgrouptitle)
 //use_exponential_scaling_SO = input.bool(false, "Use Exponential Scaling")
+SkipSO = input.int(title="SO to Skip", defval=5, group = SOinputgrouptitle)
+max_SO = input(6, title='max no. of safe orders', group = SOinputgrouptitle)
 
-max_SO = input(6, title='max no. of safe orders')
+// // Define the lot sizes for each SO as separate inputs
+// so_lot_size_1 = input.float(title="SO Lot Size 1", defval=0.7)
+// so_lot_size_2 = input.float(title="SO Lot Size 2", defval=0.8)
+// so_lot_size_3 = input.float(title="SO Lot Size 3", defval=0.9)
+// so_lot_size_4 = input.float(title="SO Lot Size 4", defval=1.1)
+// so_lot_size_5 = input.float(title="SO Lot Size 5", defval=1.5)
+// so_lot_size_6 = input.float(title="SO Lot Size 6", defval=2.0)
+
+// Input for percentage of initial capital for each SO
+so_percent_1 = input.float(15, title="SO Size 1 (% of Initial Capital)", step=0.01) / 100
+so_percent_2 = input.float(20, title="SO Size 2 (% of Initial Capital)", step=0.01) / 100
+so_percent_3 = input.float(25, title="SO Size 3 (% of Initial Capital)", step=0.01) / 100
+so_percent_4 = input.float(30, title="SO Size 4 (% of Initial Capital)", step=0.01) / 100
+so_percent_5 = input.float(40, title="SO Size 5 (% of Initial Capital)", step=0.01) / 100
+so_percent_6 = input.float(55, title="SO Size 6 (% of Initial Capital)", step=0.01) / 100
+
+// Calculate the dollar value to invest for each SO
+dollar_value_so_1 = initial_capital * so_percent_1
+dollar_value_so_2 = initial_capital * so_percent_2
+dollar_value_so_3 = initial_capital * so_percent_3
+dollar_value_so_4 = initial_capital * so_percent_4
+dollar_value_so_5 = initial_capital * so_percent_5
+dollar_value_so_6 = initial_capital * so_percent_6
+
+// // Convert dollar value to asset quantity for each SO
+// asset_quantity_so_1 = dollar_value_so_1 / close
+// asset_quantity_so_2 = dollar_value_so_2 / close
+// asset_quantity_so_3 = dollar_value_so_3 / close
+// asset_quantity_so_4 = dollar_value_so_4 / close
+// asset_quantity_so_5 = dollar_value_so_5 / close
+// asset_quantity_so_6 = dollar_value_so_6 / close
+
+asset_quantity_so_1 = math.round((dollar_value_so_1 / rounded_close) * 1000) / 1000
+asset_quantity_so_2 = math.round((dollar_value_so_2 / rounded_close) * 1000) / 1000
+asset_quantity_so_3 = math.round((dollar_value_so_3 / rounded_close) * 1000) / 1000
+asset_quantity_so_4 = math.round((dollar_value_so_4 / rounded_close) * 1000) / 1000
+asset_quantity_so_5 = math.round((dollar_value_so_5 / rounded_close) * 1000) / 1000
+asset_quantity_so_6 = math.round((dollar_value_so_6 / rounded_close) * 1000) / 1000
 
 
-base_order_lots = base_lots
-safe_order_lots = safe_lots
-safe_order_volume_scale = safe_volume_scale
+
+
+//SO_filter_input = input(defval=close, group = SOinputgrouptitle)
+//MinSOBars = input(200, title="Min Bars Between SOs", group = SOinputgrouptitle)
+//startMinSOBars = input(3, title="Start Min Bars Between SOs", group = SOinputgrouptitle)
+//startSOfilter = input(3, title="Start Filtering SOs", group = SOinputgrouptitle)
+
+// groupTitleSOsLongConditions = "Long SO Conditions"
+// use_SO_filters_long = input.bool(true, "Use SO filter Long", group = SOinputgrouptitle)
+// SO_filter_input_long = SO_filter_input
+// SO_filter_value_long = 1
+
+// groupTitleSOsShortConditions = "Short SO Conditions"
+// useShort_SO_filters = input.bool(true, "Use SO filter Short", group = SOinputgrouptitle)
+// SO_filter_input_short = SO_filter_input
+// SO_filter_value_short = -1
+
+// Take Profit Inputs
+TPinputgrouptitle = "SO Inputs"
+percent_take_profit = input.float(1, title='Percent Take Profit (%)', step=0.01, minval=0.01, group = TPinputgrouptitle) / 100
+
+
+// base_order_lots = base_lots
+// safe_order_lots = safe_lots
+//safe_order_volume_scale = safe_volume_scale
 safe_order_step_scale = safe_step_scale
 max_safe_order = max_SO
 
-base_S_order_lots = base_lots
-safe_S_order_lots = safe_lots
-safe_S_order_volume_scale = safe_volume_scale
+// base_S_order_lots = base_lots
+// safe_S_order_lots = safe_lots
+//safe_S_order_volume_scale = safe_volume_scale
 safe_S_order_step_scale = safe_step_scale
 max_S_safe_order = max_SO
 
 webhookMessage = input.string("pineconnector", "Choose message version", options=["fdas", "pineconnector"])
 
-//atrp_SO_deviation = input.float(0.005, title='ATRP SO Deviation', step=0.001, minval=0.001)
-//target_bars = input(200, title="Target Bars for Best TP Deviation")
-
-
-
-// ATRP
-// ATRP, like the ATR indicator, measures volatility. However, unlike ATR which provides absolute values, ATRP presents volatility as a percentage. This allows for comparison of securities with different share prices, as it normalizes volatility irrespective of the stock price level.
-// atr_length = 100
-// atrp_length = 14
-// atrp_length_d = 2
-// atrp_length_deviation = 7
-// ATRP_deviation_factor = 1
-// // Declare variables
-// var trp = 0.0
-// var atrps = 0.0
-// var float atrp_daily = na
-// //True Range Percentage Calculation
-// trp := ta.tr / hl2 * 100
-
-// atr_value = ta.atr(atr_length)
-// atrp = (atr_value / close) * 100
-// // Smoothed true range percentage calculation
-// atrps := ta.sma(trp, atrp_length)
-// // Daily ATRP calculation
-// atrp_daily_temp = math.round(f_security(ticker, "D", atrps, i_repaint) * 1000) / 1000
-// // Get and store yesterday's ATRP value
-// atrp_daily_yesterday = atrp_daily_temp[1]
-
-// if not barstate.isfirst
-//     atrp_daily := atrp_daily_yesterday
-
-// atrp_deviation_temp = math.round(f_security(ticker, "D", ta.sma(trp, atrp_length_deviation), i_repaint) * 1000) / 1000
-// atrp_deviation = atrp_deviation_temp * ATRP_deviation_factor
-//end atrp
 
 
 
 // begin VARS
 var current_so = 0
-var current_S_so = 0
+//var current_S_so = 0
 var initial_order = 0.0
 var initial_S_order = 0.0
 var original_ttp_value = 0.0
@@ -157,8 +206,7 @@ var i = 0
 var avg_price = 0.0
 var total_funds_in_trade = 0.0
 var total_qty_in_trade = 0.0
-var capital = 1000000.0
-var initial_capital = 1000000.0
+var capital = 1000.0
 var int long_sequence_counter = 0
 var int short_sequence_counter = 0
 var int last_so_bar = na
@@ -203,6 +251,9 @@ var pump_date = 0
 var pump_month = 0
 var drop_date = 0
 var drop_month = 0
+var firstEntryTime = 2100000000
+//var dynamicMinSOBars = MinSOBars
+var float order_size_units = na
 //end VARS
 
 // NO trade time
@@ -234,27 +285,28 @@ if long and
    strategy.position_size == 0 and 
    close > 0 and 
    window and
-   not no_trade_time and
+   //not no_trade_time and
    trigger == long_trigger
     long_sequence_counter := long_sequence_counter + 1
     longId = "Long" + str.tostring(long_sequence_counter)
     _string_long = ""
     if webhookMessage == "fdas"
-        _string_long := 'type=order,order-type=long,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '",entry=true'
+        _string_long := 'command=buy,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
     else if webhookMessage == "pineconnector"
-        _string_long := str.tostring(ID) + ',long,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '"'
-    strategy.order(longId, strategy.long, qty=(base_order_lots * 100000), comment="#" + str.tostring(long_sequence_counter) + "L E " + str.tostring(close), alert_message=_string_long)
+        _string_long := 'command=buy,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
+    strategy.order(longId, strategy.long, qty=asset_quantity_base, comment="#" + str.tostring(long_sequence_counter) + "L E " + str.tostring(close), alert_message=_string_long)
     initial_order := close
     current_so := 1
     initial_price := close
+    price_drop := close
     entry_price := close
     max_dev := close
     original_ttp_value := 0
     firstBarTime := time
     tradeCount += 1
     avg_price := close
-    total_funds_in_trade := avg_price * base_order_lots * 100000
-    total_qty_in_trade := base_order_lots * 100000
+    total_funds_in_trade := avg_price * asset_quantity_base
+    total_qty_in_trade := asset_quantity_base
     last_so_bar := na
     entry_bar_index := bar_index
     cum_tp_deviation := 0
@@ -263,8 +315,10 @@ if long and
     bars_since_entry := 0
     high_since_entry := 0.0
     low_since_entry := 0.0
+    if na(firstEntryTime)
+        firstEntryTime := time
     total_qty_in_trade
-    //log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level: {9}, safe_order_step_scale: {10}, threshold: {11}, maxDevPercent: {13}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level, safe_order_step_scale, threshold, maxDevPercent)
+// end long entry
 
 
 // short entry
@@ -273,16 +327,16 @@ else if short and
    strategy.position_size == 0 and 
    close > 0 and 
    window and
-   not no_trade_time and
+   //not no_trade_time and
    trigger == short_trigger
     short_sequence_counter := short_sequence_counter + 1
     shortId = "Short" + str.tostring(short_sequence_counter)
     _string_short = ""
     if webhookMessage == "fdas"
-        _string_short := 'type=order,order-type=short,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '",entry=true'
+        _string_short := 'command=sell,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
     else if webhookMessage == "pineconnector"
-        _string_short := str.tostring(ID) + ',short,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(base_order_lots) + ',comment="' + version + '-' + test + direction_text + '"'
-    strategy.order(shortId, strategy.short, qty=(base_order_lots * 100000), comment="#" + str.tostring(short_sequence_counter) + "S E " + str.tostring(close), alert_message=_string_short)
+        _string_short := 'command=sell,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
+    strategy.order(shortId, strategy.short, qty=asset_quantity_base, comment="#" + str.tostring(short_sequence_counter) + "S E " + str.tostring(close), alert_message=_string_short)
     initial_S_order := close
     current_so := 1
     firstBarTime := time
@@ -291,8 +345,8 @@ else if short and
     entry_price := close
     max_dev := close
     avg_price := close
-    total_funds_in_trade := avg_price * base_S_order_lots *100000
-    total_qty_in_trade := base_S_order_lots * 100000
+    total_funds_in_trade := avg_price * asset_quantity_base
+    total_qty_in_trade := asset_quantity_base
     last_so_bar := na
     entry_bar_index := bar_index
     cum_tp_deviation := 0
@@ -301,6 +355,9 @@ else if short and
     bars_since_entry := 0
     high_since_entry := na
     low_since_entry := na
+    price_pump := close
+    if na(firstEntryTime)
+        firstEntryTime := time
     total_qty_in_trade
 //end short entry
 
@@ -325,61 +382,66 @@ if strategy.position_size == 0
 //Safety order levels
 //Long
 if strategy.position_size > 0 and i==0
+    if current_so == SkipSO // Check if current SO is the one to skip
+        current_so := current_so + 1 // Skip the specified SO by incrementing current_so
     if(safe_order_step_scale == 1.0)
         threshold := initial_order - (initial_order * percent_price_deviation * safe_order_step_scale * current_so)
     else
         threshold := initial_order - (initial_order * ((percent_price_deviation * (math.pow(safe_order_step_scale, current_so) - 1)) / (safe_order_step_scale - 1)))
+
 //Short
 else if strategy.position_size <0 and i==0
+    if current_so == SkipSO // Check if current SO is the one to skip
+        current_so := current_so + 1 // Skip the specified SO by incrementing current_so
     if(safe_S_order_step_scale == 1.0)
-        S_threshold := initial_S_order * (1 + percent_price_deviation * current_so)
+        S_threshold := initial_S_order + (initial_S_order * percent_price_deviation * current_so)
     else
-        S_threshold := initial_S_order * (1 + ((percent_price_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1)) / (safe_S_order_step_scale - 1)))
+        S_threshold := initial_S_order + (initial_S_order * ((percent_price_deviation * (math.pow(safe_S_order_step_scale, current_so) - 1)) / (safe_S_order_step_scale - 1)))
 
 
-// //Safety order levels
-// //Long
-// if strategy.position_size > 0 and i==0
-//     if(safe_order_step_scale == 1.0)
-//         threshold := initial_order - (initial_order * percent_price_deviation * safe_order_step_scale * current_so)
-//     else
-//         threshold := initial_order - (initial_order * ((percent_price_deviation * (use_exponential_scaling_SO ? math.pow(safe_order_step_scale, current_so) : (math.pow(safe_order_step_scale, current_so) - 1))) / (safe_order_step_scale - 1)))
-// //Short
-// else if strategy.position_size <0 and i==0
-//     if(safe_S_order_step_scale == 1.0)
-//         S_threshold := initial_S_order * (1 + percent_price_deviation * current_so)
-//     else
-//         S_threshold := initial_S_order * (1 + ((percent_price_deviation * (use_exponential_scaling_SO ? math.pow(safe_S_order_step_scale, current_so) : (math.pow(safe_S_order_step_scale, current_so) - 1))) / (safe_S_order_step_scale - 1)))
-
-
-
-// SO conditions
-groupTitleSOsLongConditions = "Long SO Conditions"
-use_SO_filters_long = input.bool(false, "Use SO filter Long", group = groupTitleSOsLongConditions)
-SO_filter_input_long = input(defval=close, title="Enter SO filter Input Long", group = groupTitleSOsLongConditions) 
-SO_filter_value_long = input(title='SO filter value Long', defval=1, group = groupTitleSOsLongConditions)
-
-groupTitleSOsShortConditions = "Short SO Conditions"
-useShort_SO_filters = input.bool(false, "Use Short SO filter", group = groupTitleSOsShortConditions)
-SO_filter_input_short = input(defval=close, title="Enter Short SO filter Input", group = groupTitleSOsShortConditions)
-SO_filter_value_short = input(title='Short SO filter value', defval=-1, group = groupTitleSOsShortConditions)
-
-// Long SOs (safety orders) - average down to stay near price and exit
+ // Long SOs (safety orders) - average down to stay near price and exit
 if current_so > 0 and
    i == 0 and 
    strategy.position_size > 0 and 
    low <= threshold and
-   not no_trade_time and
-   (use_SO_filters_long ? SO_filter_input_long == SO_filter_value_long : true) and
-   (na(last_so_bar) or bar_index > last_so_bar + MinSOBars) and 
+   //not no_trade_time and
    current_so <= max_safe_order
-    order_size_units = safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1) * 100000
+    // Use the corresponding lot size for the current SO
+    // order_size_units := 0.0
+    // if current_so == 1
+    //     order_size_units := so_lot_size_1 * 100000
+    // else if current_so == 2
+    //     order_size_units := so_lot_size_2 * 100000
+    // else if current_so == 3
+    //     order_size_units := so_lot_size_3 * 100000
+    // else if current_so == 4
+    //     order_size_units := so_lot_size_4 * 100000
+    // else if current_so == 5
+    //     order_size_units := so_lot_size_5 * 100000
+    // else if current_so == 6
+    //     order_size_units := so_lot_size_6 * 100000
+    // Use the corresponding asset quantity for the current SO
+    order_size_units := 0.0
+    if current_so == 1
+        order_size_units := asset_quantity_so_1
+    else if current_so == 2
+        order_size_units := asset_quantity_so_2
+    else if current_so == 3
+        order_size_units := asset_quantity_so_3
+    else if current_so == 4
+        order_size_units := asset_quantity_so_4
+    else if current_so == 5
+        order_size_units := asset_quantity_so_5
+    else if current_so == 6
+        order_size_units := asset_quantity_so_6
+
     _string_long_so = ""
     if webhookMessage == "fdas"
-        _string_long_so := 'type=order,order-type=long,symbol=' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '",entry=false'
+        _string_long_so := 'command=buy,symbol=' + syminfo.ticker + ',qty=' + str.tostring(order_size_units)
     else if webhookMessage == "pineconnector"
-        _string_long_so := str.tostring(ID) + ',long,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(safe_order_lots * math.pow(safe_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '"'
-    strategy.order(longId, strategy.long, qty=(safe_order_lots * 100000) * math.pow(safe_order_volume_scale, current_so - 1), comment="#" + str.tostring(long_sequence_counter) + "L SO " + str.tostring(current_so) + '@' + str.tostring(close), alert_message=_string_long_so)
+        _string_long_so := 'command=buy,symbol=' + syminfo.ticker + ',qty=' + str.tostring(order_size_units)
+    
+    strategy.order(longId, strategy.long, qty=order_size_units, comment="#" + str.tostring(long_sequence_counter) + "L SO " + str.tostring(current_so) + '@' + str.tostring(close), alert_message=_string_long_so)
     total_funds_in_trade += threshold * order_size_units
     total_qty_in_trade += order_size_units
     avg_price := total_funds_in_trade / total_qty_in_trade
@@ -387,26 +449,38 @@ if current_so > 0 and
     tradeCount += 1
     last_so_bar := bar_index // Update the bar index when an SO is executed
     last_so_exec_price := close
-// end Long SOs (safety orders) - average down to stay near price and exit
+ // end Long SOs (safety orders)
 
-order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
+//order_size_units = safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
 
 // Short SOs (safety orders) - average up to stay near price and exit
 if current_so > 0 and 
    i == 0 and 
-   strategy.position_size < 0 and 
+   strategy.position_size < 0 and  
    high >= S_threshold and
-   not no_trade_time and
-   (useShort_SO_filters? SO_filter_input_short == SO_filter_value_short : true) and
-   (na(last_so_bar) or bar_index > last_so_bar + MinSOBars) and
+   //not no_trade_time and
    current_so <= max_S_safe_order
-    order_size_units := safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1) * 100000
+    // Use the corresponding asset quantity for the current SO
+    order_size_units := 0.0
+    if current_so == 1
+        order_size_units := asset_quantity_so_1
+    else if current_so == 2
+        order_size_units := asset_quantity_so_2
+    else if current_so == 3
+        order_size_units := asset_quantity_so_3
+    else if current_so == 4
+        order_size_units := asset_quantity_so_4
+    else if current_so == 5
+        order_size_units := asset_quantity_so_5
+    else if current_so == 6
+        order_size_units := asset_quantity_so_6
+
     _string_short_so = ""
     if webhookMessage == "fdas"
-        _string_short_so := 'type=order,order-type=short,symbol=' + str.replace(syminfo.ticker, " ", "") + '.PRO' + ',risk=' + str.tostring(safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '",entry=false'
+        _string_short_so := 'command=sell,symbol=' + syminfo.ticker + ',qty=' + str.tostring(order_size_units)
     else if webhookMessage == "pineconnector"
-        _string_short_so := str.tostring(ID) + ',short,' + syminfo.ticker + '.PRO' + ',risk=' + str.tostring(safe_S_order_lots * math.pow(safe_S_order_volume_scale, current_so - 1)) + ',comment="' + version + '-' + test + direction_text + '"'
-    strategy.order(shortId, strategy.short, qty=(safe_S_order_lots * 100000) * math.pow(safe_S_order_volume_scale, current_so - 1), comment="#" + str.tostring(short_sequence_counter) + "S SO " + str.tostring(current_so) + '@' + str.tostring(close), alert_message=_string_short_so)
+        _string_short_so := 'command=sell,symbol=' + syminfo.ticker + ',qty=' + str.tostring(order_size_units)
+    strategy.order(shortId, strategy.short, qty=order_size_units, comment="#" + str.tostring(short_sequence_counter) + "S SO " + str.tostring(current_so) + '@' + str.tostring(close), alert_message=_string_short_so)
     total_funds_in_trade += S_threshold * order_size_units
     total_qty_in_trade += order_size_units
     avg_price := total_funds_in_trade / total_qty_in_trade
@@ -414,7 +488,12 @@ if current_so > 0 and
     tradeCount += 1
     last_so_bar := bar_index // Update the bar index when an SO is executed
     last_so_exec_price := close
-// end Short SOs (safety orders) - average up to stay near price and exit
+ // end Short SOs (safety orders) - average up to stay near price and exit
+
+
+
+
+
 
 // Take Profit! No sure what this does?
 if i == 1
@@ -425,15 +504,18 @@ if i == 1
 // Calculate net profit as a percentage of initial capital
 net_profit_percentage = (total_profit / initial_capital) * 100
 
+
+
+
 // take profit long
 if take_profit_level <= high and
-   not no_trade_time and
+   //not no_trade_time and
    strategy.position_size > 0
     _string_close_long = ""
     if webhookMessage == "fdas"
-        _string_close_long := 'type=order,order-type=closelong,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"'
+        _string_close_long := 'command=close,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
     else if webhookMessage == "pineconnector"
-        _string_close_long := str.tostring(ID) + ',closelong,' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"'
+        _string_close_long := 'command=close,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
     strategy.close(longId, comment="#" + str.tostring(long_sequence_counter) + "L Close @" + str.tostring(close), alert_message=_string_close_long)
     soCount := current_so
     current_so := 0
@@ -452,17 +534,20 @@ if take_profit_level <= high and
     total_profit += trade_profit
     capital += trade_profit
     initial_order := 0.0
+    price_drop := na
+    //dynamicMinSOBars := MinSOBars // Reset the minimum bars between SOs
     capital
+// end take profit long
 
 // take profit short 
 if take_S_profit_level >= low and 
-   not no_trade_time and
+   //not no_trade_time and
    strategy.position_size < 0
     _string_close_short = ""
     if webhookMessage == "fdas"
-        _string_close_short := 'type=order,order-type=closeshort,symbol=' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"'
+        _string_close_short := 'command=close,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
     else if webhookMessage == "pineconnector"
-        _string_close_short := str.tostring(ID) + ',closeshort,' + syminfo.ticker + '.PRO' + ',comment="' + version + '-' + test + direction_text + '"'
+        _string_close_short := 'command=close,symbol=' + syminfo.ticker + ',qty=' + str.tostring(asset_quantity_base)
     strategy.close(shortId, comment="#" + str.tostring(short_sequence_counter) + "S Close Short @" + str.tostring(close), alert_message=_string_close_short)
     soCount := current_so
     current_so := 0
@@ -478,6 +563,8 @@ if take_S_profit_level >= low and
     capital += trade_profit
     last_so_exec_price := na
     initial_S_order := 0.0
+    price_pump := na
+    //dynamicMinSOBars := MinSOBars // Reset the minimum bars between SOs
 // end take profit short 
 
 
@@ -512,6 +599,9 @@ if strategy.position_size == 0
     soCount
 closedTrades := noSO + SO1 * 2 + SO2 * 3 + SO3 * 4 + SO4 * 5 + SO5 * 6 + SO6 * 7 + SO7 * 8
 
+// Calculate total max lots
+total_max_lots = asset_quantity_so_1 + asset_quantity_so_2 + asset_quantity_so_3 + asset_quantity_so_4 + asset_quantity_so_5 + asset_quantity_so_6
+
 // calculate the max drop
 if low < price_drop and window and strategy.position_size > 0
     price_drop := low
@@ -529,6 +619,16 @@ if high > price_pump and window and strategy.position_size < 0
         pump_date := dayofmonth(time)
         pump_month := month(time)
         pump_month
+
+
+// Calculate the time difference from the first entry
+timeDiffFromFirstEntry = time - firstEntryTime
+
+// Turn that time difference into days
+daysSinceFirstEntry = timeDiffFromFirstEntry / 86400000
+
+// Calculate average net profit per day
+AvgNetperDay = strategy.netprofit / daysSinceFirstEntry
 
 
 //  Various Plots
@@ -566,6 +666,7 @@ bgcolor(no_trade_time ? color.new(#3a3a3b, 84) : na)
 // plot Safety order (SO) levels calculations
 plot(threshold, color=color.rgb(255, 82, 82, 94), title="Threshold")
 plot(S_threshold, color=color.rgb(33, 149, 243, 94), title="S_Threshold")
+
 // END Plots
 
 
@@ -602,14 +703,7 @@ if show_table
         tbb3.R(1).TextColor(tableText).TextSize(size.small).Text("Max Dev", str.tostring(maxDev)).Bg(rowBG)
         tbb3.R(2).TextColor(tableText).TextSize(size.small).Text("Max Drop", str.tostring(max_drop) + ' ' + str.tostring(drop_month) + '/' + str.tostring(drop_date)).Bg(rowBG)
         tbb3.R(3).TextColor(tableText).TextSize(size.small).Text("Max Pump", str.tostring(max_pump) + ' ' + str.tostring(pump_month) + '/' + str.tostring(pump_date)).Bg(rowBG)
-        //tbb3.R(5).TextColor(tableText).TextSize(size.small).Text("Max Short Dev", str.tostring(maxSDev)).Bg(rowBG)
-        
-        //tbb3.R(5).TextColor(tableText).TextSize(size.small).Text("?", str.tostring()).Bg(rowBG)
+        tbb3.R(4).TextColor(tableText).TextSize(size.small).Text("Total Max Lots", str.tostring(total_max_lots)).Bg(rowBG)
+        tbb3.R(5).TextColor(tableText).TextSize(size.small).Text("Avg Net per Day", str.tostring(AvgNetperDay)).Bg(rowBG)
         //tbb3.R(6).TextColor(tableText).TextSize(size.small).Text("?", str.tostring()).Bg(rowBG)
 
-
-
-
-// example log
-// log.info("#{0} - L SO#{1} - Avg price: {2}, Total funds in trade: {3}, Total qty in trade: {4}, Strategy position size: {5}, Safe order: {6}, SO volume scale: {7}, SO Step Scale: {8}, Take Profit Level {9}, atrp_price_deviation: {10}, safe_order_step_scale: {11}, atrp_daily: {12}, maxDevATRP: {13}", long_sequence_counter, (current_so - 1), avg_price, total_funds_in_trade, total_qty_in_trade, strategy.position_size, (safe_order_lots * 100000), safe_order_volume_scale, safe_order_step_scale, take_profit_level, atrp_price_deviation, safe_order_step_scale, atrp_daily, maxDevATRP)
-        

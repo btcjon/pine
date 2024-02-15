@@ -1,0 +1,758 @@
+//@thetradingbot
+//@version=5
+indicator(title='TTB Signals 1.2', overlay=true, shorttitle='TTB Signals 1.2', max_bars_back = 4900)
+
+import thetradingbot/TTB_TableBuilder/1 as TTBTableBuilder
+
+//main colors
+color bullish = #00a2ff
+color bullish2 = #00a2ffa5
+color bullish3 = #00a2ff1f
+color bearish = #C70A80ff
+color bearish2 = color.rgb(238, 2, 147, 34)
+color bearish3 = color.rgb(199, 10, 126, 88)
+
+// f_security function for MTF
+f_security(_sym, _res, _src, _rep) =>
+    request.security(_sym, _res, _src[not _rep and barstate.isrealtime ? 1 : 0])[_rep or barstate.isrealtime ? 0 : 1]
+var bool i_repaint = false // Set to false to avoid repainting
+var string ticker = syminfo.tickerid
+
+HTF1 = input.int(30, title='HTF1')
+HTF_Factor = input.int(2, title='ATRP Length', minval=1)
+HTF2 = HTF1 * HTF_Factor
+HTF3 = HTF1 * HTF_Factor
+
+// Convert integer timeframes to string
+HTF1_str = str.tostring(HTF1)
+HTF2_str = str.tostring(HTF2)
+HTF3_str = str.tostring(HTF3)
+
+
+// vars
+var float signal = na
+var float SO_filter = na
+var float SO_triggers = na
+var float chart_trend = na
+var float HTF1_trend = na
+var float HTF2_trend = na
+var float HTF3_trend = na
+
+
+// ATRP
+atrp_length = input.int(14, title='ATRP Length', minval=1)
+atrp_length_d = input.int(2, title='ATRP Length for Daily', minval=1)
+atrp_length_deviation = input.int(7, title='ATRP Length for deviation', minval=1)
+ATRP_deviation_factor = input.float(1.0, title='ATRP Daily Factor', step=0.01)
+ATRP_daily_factor = input.float(0.15, title='ATRP Daily Factor', step=0.01)
+
+// Declare variables
+var trp = float(0)
+var atrp = float(0)
+var float atrp_daily = na
+
+//True Range Percentage Calculation
+trp := ta.tr / hl2 * 100
+
+round_to(n, decimals) =>
+    mult = 1.0
+    for i = 1 to decimals
+        mult := mult * 10
+    round_n = na(n * mult + 0.5) ? na : (n * mult + 0.5) - (n * mult + 0.5) % 1
+    round_n / mult
+
+// Smoothed true range percentage calculation
+atrp := ta.sma(trp, atrp_length)
+
+// Daily ATRP calculation
+atrp_daily_temp = round_to(f_security(ticker, "D", atrp, i_repaint), 4)
+// Get and store yesterday's ATRP value
+atrp_daily_yesterday = atrp_daily_temp[1]
+
+if not barstate.isfirst
+    atrp_daily := atrp_daily_yesterday
+//define ATRP Target to be used in Take Profit Calculations
+atrp_target = atrp_daily * ATRP_daily_factor
+
+atrp_deviation_temp = round_to(f_security(ticker, "D", ta.sma(trp, atrp_length_deviation), i_repaint), 4)
+atrp_deviation = atrp_deviation_temp * ATRP_deviation_factor
+//end atrp
+
+
+
+// atr
+atr_length = 100
+ma_function(_source, _length) => ta.rma(_source, _length)
+avg_atr = ma_function(ta.tr, atr_length)
+ATR = ta.atr(100)
+//end atr
+
+
+
+// TD 8s and 9s
+// inputs
+grouptitleTD8s9s = "TD 8s & 9s"
+showBuy8TDs = input(false, title="Show TD Buy 8", group = grouptitleTD8s9s)
+showSell8TDs = input(false, title="Show TD Sell 8", group = grouptitleTD8s9s)
+showBuy9TDs = input(false, title="Show TD Buy 9", group = grouptitleTD8s9s)
+showSell9TDs = input(false, title="Show TD Sell 9", group = grouptitleTD8s9s)
+// // TD CALCS 
+buySignals = 0
+buySignals := (close < close[4]) ? buySignals[1] == 9 ? 1 : buySignals[1] + 1 : 0
+
+sellSignals = 0
+sellSignals := (close > close[4]) ? sellSignals[1] == 9 ? 1 : sellSignals[1] + 1 : 0
+
+BuyOrSell = buySignals > sellSignals ? buySignals : sellSignals
+
+// TD8buy = showBuy8TDs and buySignals and BuyOrSell == 8
+// TD9buy = showBuy9TDs and buySignals and BuyOrSell == 9
+
+TD8buy = showBuy8TDs and buySignals > 0 and BuyOrSell == 8
+TD9buy = showBuy9TDs and buySignals > 0 and BuyOrSell == 9
+
+TD8sell = showSell8TDs and sellSignals > 0 and BuyOrSell == 8
+TD9sell = showSell9TDs and sellSignals > 0 and BuyOrSell == 9
+
+// TD8sell = showSell8TDs and sellSignals and BuyOrSell == 8
+// TD9sell = showSell9TDs and sellSignals and BuyOrSell == 9
+
+
+//DCA Plots
+TDbuycondition = (close < close[4]) ? buySignals[1] == 9 ? 1 : buySignals[1] + 1 : 0
+TDsellcondition = (close > close[4]) ? sellSignals[1] == 9 ? 1 : sellSignals[1] + 1 : 0
+// plot (buycondition, 'buycondition', color=bullish2)
+// plot (sellcondition, 'sellcondition', color=bearish2)
+
+// ALERTS /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+alertcondition(TD8buy, "TD 8 Buy", "TD 8 Buy") // Once per bar close
+alertcondition(TD9buy, "TD 9 Buy", "TD 9 Buy") // Once per bar close
+alertcondition(TD8sell, "TD 8 Sell", "TD 8 Sell") // Once per bar close
+alertcondition(TD9sell, "TD 9 Sell", "TD 9 Sell") // Once per bar close
+// end TD 8s and 9s
+
+
+
+
+
+
+
+
+
+// half trend
+ht_groupTitleHalfTrend = "Half Trend"
+ht_amplitude = input(title='Amplitude', defval=20, group = ht_groupTitleHalfTrend)
+ht_channelDeviation = 10
+ht_showArrows = input(title='Show Arrows', defval=false, group = ht_groupTitleHalfTrend)
+//ht_showChannels = input(title='Show Channels', defval=false, group = ht_groupTitleHalfTrend)
+
+var int ht_trend = 0
+var int ht_nextTrend = 0
+var float ht_maxLowPrice = nz(low[1], low)
+var float ht_minHighPrice = nz(high[1], high)
+
+var float ht_up = 0.0
+var float ht_down = 0.0
+float ht_atrHigh = 0.0
+float ht_atrLow = 0.0
+float ht_arrowUp = na
+float ht_arrowDown = na
+
+ht_atr2 = ta.atr(100) / 2
+ht_dev = ht_channelDeviation * ht_atr2
+
+ht_highPrice = high[math.abs(ta.highestbars(ht_amplitude))]
+ht_lowPrice = low[math.abs(ta.lowestbars(ht_amplitude))]
+ht_highma = ta.sma(high, ht_amplitude)
+ht_lowma = ta.sma(low, ht_amplitude)
+
+if ht_nextTrend == 1
+    ht_maxLowPrice := math.max(ht_lowPrice, ht_maxLowPrice)
+
+    if ht_highma < ht_maxLowPrice and close < nz(low[1], low)
+        ht_trend := 1
+        ht_nextTrend := 0
+        ht_minHighPrice := ht_highPrice
+        ht_minHighPrice
+else
+    ht_minHighPrice := math.min(ht_highPrice, ht_minHighPrice)
+
+    if ht_lowma > ht_minHighPrice and close > nz(high[1], high)
+        ht_trend := 0
+        ht_nextTrend := 1
+        ht_maxLowPrice := ht_lowPrice
+        ht_maxLowPrice
+
+if ht_trend == 0
+    if not na(ht_trend[1]) and ht_trend[1] != 0
+        ht_up := na(ht_down[1]) ? ht_down : ht_down[1]
+        ht_arrowUp := ht_up - ht_atr2
+        ht_arrowUp
+    else
+        ht_up := na(ht_up[1]) ? ht_maxLowPrice : math.max(ht_maxLowPrice, ht_up[1])
+        ht_up
+    ht_atrHigh := ht_up + ht_dev
+    ht_atrLow := ht_up - ht_dev
+    ht_atrLow
+else
+    if not na(ht_trend[1]) and ht_trend[1] != 1
+        ht_down := na(ht_up[1]) ? ht_up : ht_up[1]
+        ht_arrowDown := ht_down + ht_atr2
+        ht_arrowDown
+    else
+        ht_down := na(ht_down[1]) ? ht_minHighPrice : math.min(ht_minHighPrice, ht_down[1])
+        ht_down
+    ht_atrHigh := ht_down + ht_dev
+    ht_atrLow := ht_down - ht_dev
+    ht_atrLow
+
+ht = ht_trend == 0 ? ht_up : ht_down
+
+var color ht_buyColor = bullish
+var color ht_sellColor = bearish
+
+ht_htColor = ht_trend == 0 ? ht_buyColor : ht_sellColor
+
+
+ht_buySignal = not na(ht_arrowUp) and ht_trend == 0 and ht_trend[1] == 1
+ht_sellSignal = not na(ht_arrowDown) and ht_trend == 1 and ht_trend[1] == 0
+
+// end half trend
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~}
+
+
+
+
+
+
+
+
+//Nadaraya-Watson non repainting
+src = close
+h = input.float(8., 'Lookback Window', minval=3., tooltip='The number of bars used for the estimation. This is a sliding value that represents the most recent historical bars. Recommended range: 3-50')
+r = input.float(8., 'Relative Weighting', step=0.25, tooltip='Relative weighting of time frames. As this value approaches zero, the longer time frames will exert more influence on the estimation. As this value approaches infinity, the behavior of the Rational Quadratic Kernel will become identical to the Gaussian kernel. Recommended range: 0.25-25')
+x_0 = input.int(25, "Start Regression at Bar", tooltip='Bar index on which to start regression. The first bars of a chart are often highly volatile, and omission of these initial bars often leads to a better overall fit. Recommended range: 5-25')
+showMiddle = false
+smoothColors = false
+lag = 2
+showNWplots = input(false, "Show NW Plots")
+showNWSignals = input(false, "Show NW Signals")
+
+lenjeje = input(32, "NW ATR Period", tooltip= 'Period to calculate upper and lower band', group='Bands')
+coef = input(2.7,"NW Multiplier",tooltip= 'Multiplier to calculate upper and lower band', group='Bands')
+float y1 = 0.
+float y2 = 0.
+srcArray = array.new<float>(0)
+array.push(srcArray, src)
+size = array.size(srcArray)
+
+
+kernel_regression1(_src, _size, _h) =>
+    float _currentWeight = 0.
+    float _cumulativeWeight = 0.
+    for i = 0 to _size + x_0
+        y = _src[i] 
+        w = math.pow(1 + (math.pow(i, 2) / ((math.pow(_h, 2) * 2 * r))), -r)
+        _currentWeight += y*w
+        _cumulativeWeight += w
+    [_currentWeight, _cumulativeWeight]
+
+[currentWeight1, cumulativeWeight1] = kernel_regression1(src, size, h)
+yhat1 = currentWeight1 / cumulativeWeight1
+[currentWeight2, cumulativeWeight2] = kernel_regression1(src, size, h-lag)
+yhat2 = currentWeight2 / cumulativeWeight2
+
+// Rates of Change
+bool wasBearish = yhat1[2] > yhat1[1]
+bool wasBullish = yhat1[2] < yhat1[1]
+bool isBearish = yhat1[1] > yhat1
+bool isBullish = yhat1[1] < yhat1
+bool isBearishChange = isBearish and wasBullish
+bool isBullishChange = isBullish and wasBearish
+
+// Crossovers
+bool isBullishCross = ta.crossover(yhat2, yhat1)
+bool isBearishCross = ta.crossunder(yhat2, yhat1) 
+bool isBullishSmooth = yhat2 > yhat1
+bool isBearishSmooth = yhat2 < yhat1
+
+// Colors
+color colorByCross = isBullishSmooth ? bullish : bearish
+color colorByRate = isBullish ? bullish : bearish
+color plotColor = smoothColors ? colorByCross : colorByRate
+
+
+upperjeje = yhat1 + coef*ta.atr(lenjeje)
+lowerjeje = yhat1 - coef*ta.atr(lenjeje)
+//upperje = plot(showNWplots ? upperjeje : na, "Rational Quadratic Kernel Upper", color=bullish, linewidth=1)
+//lowerje = plot(showNWplots ? lowerjeje : na, "Rational Quadratic Kernel Lower", color=bearish, linewidth=1)
+
+NW_short = ta.crossover(close, upperjeje)
+NW_long = ta.crossunder(close, lowerjeje)
+//  END Nadaraya-Watson non repainting
+
+
+
+
+
+
+
+
+
+
+// Structure
+groupTitleStructureSettings = "Structure Settings"
+MSlength  = input(5, 'Pivot Lookback', group = groupTitleStructureSettings)
+incr    = input.float(95, 'Increment Factor %', minval = 0, group = groupTitleStructureSettings)
+showTS  = input(false, "Show TS", group = groupTitleStructureSettings)
+showTrendChange = input.bool(false, "Show Trend Change", group = groupTitleStructureSettings)
+show_ts_htf1 = input.bool(false, title="Show HTF1 Trailing Stop", group = groupTitleStructureSettings)
+show_ts_htf2 = input.bool(false, title="Show HTF2 Trailing Stop", group = groupTitleStructureSettings)
+show_ts_htf3 = input.bool(false, title="Show HTF3 Trailing Stop", group = groupTitleStructureSettings)
+//showTrendChangeBG = input.bool(false, title="Show Trend Change Background", group = groupTitleStructureSettings)
+
+resetOn = 'CHoCH'
+
+//Style 
+bullCss    = bullish2
+bearCss    = bearish2
+retCss     = #413002
+areaTransp = 90
+
+bullCss2    = bullish2
+bearCss2    = bearish2
+retCss2    = #413002
+areaTransp2 = 90
+
+//structure Global variables
+var float ph_y = na , var int ph_x = na
+var float pl_y = na , var int pl_x = na
+var float top = na  , var float btm = na
+var ph_cross = false, var pl_cross = false
+
+var float max = na
+var float min = na
+var float ts = na
+
+var os = 0
+ms = 0
+
+//Detect pivots and get coordinates
+n = bar_index
+ph = ta.pivothigh(MSlength, MSlength)
+pl = ta.pivotlow(MSlength, MSlength)
+
+if ph > 0
+    ph_y := ph
+    ph_x := n - MSlength
+    ph_cross := false
+
+if pl > 0
+    pl_y := pl
+    pl_x := n - MSlength
+    pl_cross := false
+
+//Bullish structures
+if close > ph_y and not ph_cross
+    if resetOn == 'CHoCH'
+        ms := os == -1 ? 1 : 0
+    else
+        ms := 1
+
+    ph_cross := true
+
+
+    os := 1
+
+    //Search for local minima
+    btm := low
+    for i = 0 to (n - ph_x)-1
+        btm := math.min(low[i], btm)
+
+    osChange = os != os[1]
+
+//Bearish structures
+if close < pl_y and not pl_cross
+    if resetOn == 'CHoCH'
+        ms := os == 1 ? -1 : 0
+    else
+        ms := -1
+
+    pl_cross := true
+
+    os := -1
+
+    //Search for local maxima
+    top := high
+    for i = 0 to (n - pl_x)-1
+        top := math.max(high[i], top)
+
+    osChange = os != os[1]
+
+//Trailing stop max/min
+if ms == 1
+    max := close
+else if ms == -1
+    min := close
+else
+    max := math.max(close, max)
+    min := math.min(close, min)
+
+//Trailing stop
+ts := ms == 1 ? btm
+  : ms == -1 ? top
+  : os == 1 ? ts + (max - max[1]) * incr / 100
+  : ts + (min - min[1]) * incr / 100
+
+css = (ms > 0) ? na 
+  : os == 1 ? bullCss
+  : bearCss
+
+css2 = (ms > 0) ? na 
+  : os == 1 ? bullCss2
+  : bearCss2
+
+css_area = (close - ts) * os < 0 ? retCss
+  : css
+
+osChange = os != os[1]
+
+
+var float ts_htf1 = na
+var float ts_htf2 = na
+var float ts_htf3 = na
+
+
+// MTF
+ts_htf1 := f_security(ticker, HTF1_str, ts, i_repaint)
+ts_htf2 := f_security(ticker, HTF2_str, ts, i_repaint)
+ts_htf3 := f_security(ticker, HTF3_str, ts, i_repaint)
+
+os_htf1 = f_security(ticker, HTF1_str, os, i_repaint)
+os_htf2 = f_security(ticker, HTF2_str, os, i_repaint)
+os_htf3 = f_security(ticker, HTF3_str, os, i_repaint)
+
+trendUp = os == 1 and osChange
+trendDown = os == -1 and osChange
+
+trendingUp = os == 1
+trendingDown = os == -1
+
+//MTF os
+trendingUpHTF1 = os_htf1 == 1
+trendingDownHTF1 = os_htf1 == -1
+trendingUpHTF2 = os_htf2 == 1
+trendingDownHTF2 = os_htf2 == -1
+trendingUpHTF3 = os_htf3 == 1
+trendingDownHTF3 = os_htf3 == -1
+
+trendstatusHTF1 = trendingUpHTF1 ? 'Up'
+  : trendingDownHTF1 ? 'Down'
+  : 'Neutral'
+
+trendstatusHTF2 = trendingUpHTF2 ? 'Up'
+  : trendingDownHTF2 ? 'Down'
+  : 'Neutral'
+
+trendstatusHTF3 = trendingUpHTF3 ? 'Up'
+  : trendingDownHTF3 ? 'Down'
+  : 'Neutral'
+
+trendChangeUpHTF1 = os_htf1 == 1 and (os_htf1 != os_htf1[1])
+trendChangeDownHTF1 = os_htf1 == -1 and (os_htf1 != os_htf1[1])
+trendChangeUpHTF2 = os_htf2 == 1 and (os_htf2 != os_htf2[1])
+trendChangeDownHTF2 = os_htf2 == -1 and (os_htf2 != os_htf2[1])
+trendChangeUpHTF3 = os_htf3 == 1 and (os_htf3 != os_htf3[1])
+trendChangeDownHTF3 = os_htf3 == -1 and (os_htf3 != os_htf3[1])
+
+
+above_ts_htf1 = close > ts_htf1
+below_ts_htf1 = close < ts_htf1
+above_ts_htf2 = close > ts_htf2
+below_ts_htf2 = close < ts_htf2
+above_ts_htf3 = close > ts_htf3
+below_ts_htf3 = close < ts_htf3
+
+alertcondition(ta.crossunder(close,ts), title='Price crossed down under Trail', message='{{ticker}} Price crossed down under Trail')
+alertcondition(ta.crossover(close,ts), title='Price crossed up over Trail', message='{{ticker}}Price crossed up over Trail')
+alertcondition(trendUp, title='Trend Change Up', message='{{ticker}} Trend Change Up')
+alertcondition(trendDown, title='Trend Change Down', message='{{ticker}} Trend Change Down')
+// end structure
+
+
+
+
+// random rules
+twobarup = close[1] > open[1] and close > open
+twobardown = close[1] < open[1] and close < open
+threebarup = close[2] > open[2] and close[1] > open[1] and close > open
+threebardown = close[2] < open[2] and close[1] < open[1] and close < open
+
+
+
+
+
+
+
+
+
+
+
+
+
+groupTitleLongEntry = "Long Entry"
+Struc_trigger_long_Input = input.bool(false, "Struc Trigger Long", group = groupTitleLongEntry)
+ht_long_trigger = input.bool(false, "Long HT Trigger", group = groupTitleLongEntry)
+//exRev_long_trigger = input.bool(false, "Long Ex Rev Trigger", group = groupTitleLongEntry)
+NW_long_trigger = input.bool(false, "Long NW Trigger", group = groupTitleLongEntry)
+
+groupTitleLongFilters = "Long Filters"
+trendingUp_filter = input.bool(false, "trendingUp long trend filter", group = groupTitleLongFilters)
+twobarup_filter = input.bool(false, "2nd bar up filter", group = groupTitleLongFilters)
+above_ts_htf1_filter = input.bool(false, "Use hft1 long trend filter", group = groupTitleLongFilters)
+above_ts_htf2_filter = input.bool(false, "Use hft2 long trend filter", group = groupTitleLongFilters)
+above_ts_htf3_filter = input.bool(false, "Use hft3 long trend filter", group = groupTitleLongFilters)
+
+
+groupTitleShortEntry = "Short Entry"
+Struc_trigger_short_Input = input.bool(false, "Struc Trigger Short", group = groupTitleShortEntry)
+ht_short_trigger = input.bool(false, "Short HT Trigger", group = groupTitleShortEntry)
+//exRev_short_trigger = input.bool(false, "Short Ex Rev Trigger", group = groupTitleShortEntry)
+NW_short_trigger = input.bool(false, "Short NW Trigger", group = groupTitleShortEntry)
+
+groupTitleShortFilters = "Short Filters"
+trendingDown_filter = input.bool(false, "trendingDown short trend filter", group = groupTitleShortFilters)
+twobardown_filter = input.bool(false, "2nd bar down filter", group = groupTitleShortFilters)
+below_ts_htf1_filter = input.bool(false, "Use hft1 short trend filter", group = groupTitleShortFilters)
+below_ts_htf2_filter = input.bool(false, "Use hft2 short trend filter", group = groupTitleShortFilters)
+below_ts_htf3_filter = input.bool(false, "Use hft3 short trend filter", group = groupTitleShortFilters)
+
+
+
+
+longsignal = (
+   (Struc_trigger_long_Input and trendUp) or
+   (ht_long_trigger and ht_buySignal) or
+   //(exRev_long_trigger and exLongTrigger) or
+   (NW_long_trigger and NW_long)
+   ) and
+   (trendingUp_filter ? trendingUp : true) and
+   (above_ts_htf1_filter ? above_ts_htf1 : true) and
+   (above_ts_htf2_filter ? above_ts_htf2 : true) and
+   (above_ts_htf3_filter ? above_ts_htf3 : true) and
+   (twobarup_filter ? twobarup : true)
+
+longsignal_filters = (trendingUp_filter ? trendingUp : true) and
+   (above_ts_htf1_filter ? above_ts_htf1 : true) and
+   (above_ts_htf2_filter ? above_ts_htf2 : true) and
+   (above_ts_htf3_filter ? above_ts_htf3 : true) and
+   (twobarup_filter ? twobarup : true)
+// Add this input to control the background color
+show_longsignal_filter_bg = input.bool(false, "Show Long Signal Filter Background", group = groupTitleLongFilters)
+// Modify this line to change the background color based on the new input
+bgcolor(show_longsignal_filter_bg and longsignal_filters ? #00460062 : na)
+
+shortsignal = (
+   (Struc_trigger_short_Input and trendDown) or
+   (ht_short_trigger and ht_sellSignal) or
+   //(exRev_short_trigger and exShortTrigger) or
+   (NW_short_trigger and NW_short)
+   ) and
+   (trendingDown_filter ? trendingDown : true) and
+   (below_ts_htf1_filter ? below_ts_htf1 : true) and
+   (below_ts_htf2_filter ? below_ts_htf2 : true) and
+   (below_ts_htf3_filter ? below_ts_htf3 : true) and
+   (twobardown_filter ? twobardown : true)
+
+shortsignal_filters = (trendingDown_filter ? trendingDown : true) and
+   (below_ts_htf1_filter ? below_ts_htf1 : true) and
+   (below_ts_htf2_filter ? below_ts_htf2 : true) and
+   (below_ts_htf3_filter ? below_ts_htf3 : true) and
+   (twobardown_filter ? twobardown : true)
+// Add this input to control the background color
+show_shortsignal_filter_bg = input.bool(false, "Show Short Signal Filter Background", group = groupTitleShortFilters)
+// Modify this line to change the background color based on the new input
+bgcolor(show_shortsignal_filter_bg and shortsignal_filters ? #6b04047c : na)
+
+// Calculate signals
+signal := longsignal ? 1.0 : shortsignal ? -1.0 : na
+
+// Signal plots
+plot(signal, title="Signal", color=color.rgb(76, 175, 79, 100))
+// plotshape(series=signal == 1.0, title='Long Signal', style=shape.triangleup, location=location.belowbar, color=bullish, size=size.tiny)
+// plotshape(series=signal == -1.0, title='Short Signal', style=shape.triangledown, location=location.abovebar, color=bearish, size=size.tiny)
+// END Signals
+
+
+
+
+// SO Filters
+
+var float SO_filter_longs_value = na
+var float SO_filter_shorts_value = na
+
+groupTitleSOFiltersLong = "SO Filters Long"
+trendingUp_filter_SO = input.bool(false, "trendingUp long trend filter", group = groupTitleSOFiltersLong)
+twobarup_filter_SO = input.bool(false, "2nd bar up filter", group = groupTitleSOFiltersLong)
+above_ts_htf1_filter_SO = input.bool(false, "Use hft1 long trend filter", group = groupTitleSOFiltersLong)
+above_ts_htf2_filter_SO = input.bool(false, "Use hft2 long trend filter", group = groupTitleSOFiltersLong)
+above_ts_htf3_filter_SO = input.bool(false, "Use hft3 long trend filter", group = groupTitleSOFiltersLong)
+
+groupTitleSOFiltersShort = "SO Filters Short"
+trendingDown_filter_SO = input.bool(false, "trendingDown short trend filter", group = groupTitleSOFiltersShort)
+twobardown_filter_SO = input.bool(false, "2nd bar down filter", group = groupTitleSOFiltersShort)
+below_ts_htf1_filter_SO = input.bool(false, "Use hft1 short trend filter", group = groupTitleSOFiltersShort)
+below_ts_htf2_filter_SO = input.bool(false, "Use hft2 short trend filter", group = groupTitleSOFiltersShort)
+below_ts_htf3_filter_SO = input.bool(false, "Use hft3 short trend filter", group = groupTitleSOFiltersShort)
+
+// SO Long Filter Logic
+SO_filter_longs_cond = (trendingUp_filter_SO or trendingUp) and 
+   (twobarup_filter_SO or twobarup) and
+   (above_ts_htf1_filter_SO or above_ts_htf1) and
+   (above_ts_htf2_filter_SO or above_ts_htf2) and
+   (above_ts_htf3_filter_SO or above_ts_htf3)
+
+
+// Short Filter Logic
+SO_filter_shorts_cond = (trendingDown_filter_SO or trendingDown) and
+                         (twobardown_filter_SO or twobardown) and
+                         (below_ts_htf1_filter_SO or below_ts_htf1) and
+                         (below_ts_htf2_filter_SO or below_ts_htf2) and
+                         (below_ts_htf3_filter_SO or below_ts_htf3)
+
+
+
+
+SO_filter_longs_value := SO_filter_longs_cond ? 1.0 : na
+SO_filter_shorts_value := SO_filter_shorts_cond ? -1.0 : na
+
+// Plot the values separately
+plot(SO_filter_longs_value ? SO_filter_longs_value : SO_filter_shorts_value, title="SO Filter", color=SO_filter_longs_value ? color.rgb(76, 175, 79, 98) : color.rgb(255, 82, 82, 96))
+// end SO filters
+
+
+//SO Triggers
+// groupTitleSOTriggersLong = "SO Triggers Long"
+// trendUpSOTrigger_Long = input.bool(false, "trendUp SO Trigger Long", group = groupTitleSOTriggersLong)
+// trendUp_htf1_SOTrigger_Long = input.bool(false, "trendUp htf1 SO Trigger Long", group = groupTitleSOTriggersLong)
+// trendUp_htf2_SOTrigger_Long = input.bool(false, "trendUp htf2 SO Trigger Long", group = groupTitleSOTriggersLong)
+// trendUp_htf3_SOTrigger_Long = input.bool(false, "trendUp htf3 SO Trigger Long", group = groupTitleSOTriggersLong)
+
+// groupTitleSOTriggersShort = "SO Triggers Short"
+// trendDownSOTrigger_Short = input.bool(false, "trendDown SO Trigger Short", group = groupTitleSOTriggersShort)
+// trendDown_htf1_SOTrigger_Short = input.bool(false, "trendDown htf1 SO Trigger Short", group = groupTitleSOTriggersShort)
+// trendDown_htf2_SOTrigger_Short = input.bool(false, "trendDown htf2 SO Trigger Short", group = groupTitleSOTriggersShort)
+// trendDown_htf3_SOTrigger_Short = input.bool(false, "trendDown htf3 SO Trigger Short", group = groupTitleSOTriggersShort)
+
+// SO_trigger_longs_cond = (trendUpSOTrigger_Long and trendUp) or
+//    (trendUp_htf1_SOTrigger_Long and trendChangeUpHTF1) or
+//    (trendUp_htf2_SOTrigger_Long and trendChangeUpHTF2) or
+//    (trendUp_htf3_SOTrigger_Long and trendChangeUpHTF3)
+
+// SO_trigger_shorts_cond = (trendDownSOTrigger_Short and trendDown) or   
+//    (trendDown_htf1_SOTrigger_Short and trendChangeDownHTF1) or
+//    (trendDown_htf2_SOTrigger_Short and trendChangeDownHTF2) or
+//    (trendDown_htf3_SOTrigger_Short and trendChangeDownHTF3)
+
+// var float SO_trigger_longs_value = na
+// var float SO_trigger_shorts_value = na
+
+// SO_trigger_longs_value := SO_trigger_longs_cond ? 1.0 : na
+// SO_trigger_shorts_value := SO_trigger_shorts_cond ? -1.0 : na
+
+// plotshape(SO_trigger_longs_value, title="SO Trigger Longs", color=bullish, style=shape.diamond, location = location.belowbar, size=size.large)
+// plotshape(SO_trigger_shorts_value, title="SO Trigger Shorts", color=bearish, style=shape.diamond, location = location.abovebar, size=size.large)
+
+// SO_triggers := SO_trigger_longs_value ? 1.0 : SO_trigger_shorts_value ? -1.0 : na
+// plot(SO_triggers, title="SO Triggers", color=color.rgb(76, 175, 79, 94))
+// end SO triggers
+
+// HT plots
+// plotshape(ht_showArrows and ht_buySignal ? ht_atrLow : na, title='HT Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(ht_buyColor, 0))
+// plotshape(ht_showArrows and ht_sellSignal ? ht_atrHigh : na, title='HT Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(ht_sellColor, 0))
+plotshape(ht_showArrows and ht_buySignal and signal == 1 ? ht_atrLow : na, title='HT Up', style=shape.triangleup, location=location.absolute, size=size.tiny, color=color.new(ht_buyColor, 0))
+plotshape(ht_showArrows and ht_sellSignal and signal == -1 ? ht_atrHigh : na, title='HT Down', style=shape.triangledown, location=location.absolute, size=size.tiny, color=color.new(ht_sellColor, 0))
+// end HT plots
+
+
+
+// NW plots
+plotchar(showNWSignals and ta.crossover(close, upperjeje) and signal == -1, title='NW Down', char = "💧", location = location.abovebar, offset = 4, size = size.tiny)
+plotchar(showNWSignals and ta.crossunder(close, lowerjeje) and signal == 1, title='NW Up', char = "🚀", location = location.belowbar, offset = 5, size = size.tiny)
+// Alerts for Color Changes estimator
+alertcondition(smoothColors ? isBearishCross : isBearishChange, title='Bearish Color Change', message='Nadaraya-Watson: {{ticker}} ({{interval}}) turned Bearish ▼')
+alertcondition(smoothColors ? isBullishCross : isBullishChange, title='Bullish Color Change', message='Nadaraya-Watson: {{ticker}} ({{interval}}) turned Bullish ▲')
+
+// Alerts when price cross upper and lower band
+alertcondition(ta.crossover(close,upperjeje), title='Price close above upper band', message='Nadaraya-Watson: {{ticker}} ({{interval}}) Crossed above upper band 💧')
+alertcondition(ta.crossunder(close,lowerjeje), title='Price close under lower band', message='Nadaraya-Watson: {{ticker}} ({{interval}}) crossed under lower band 🚀')
+// end NW plots
+
+
+// Struc Plots
+plot_ts    = plot(showTS ? ts : na, 'Trailing Stop', color = css2)
+plotshape(showTrendChange ? trendUp : na, style=shape.triangleup, location=location.belowbar, color=bullish, size=size.tiny, title="Up Trend Chart Trigger")
+plotshape(showTrendChange ? trendDown : na, style=shape.triangledown, location=location.abovebar, color=bearish, size=size.tiny, title="Down Trend Chart Trigger")
+
+// Plot the trailing stops with individual checkboxes
+plot_ts_htf1 = plot(show_ts_htf1 ? ts_htf1 : na, 'HTF1 Trailing Stop', color = css)
+plot_ts_htf2 = plot(show_ts_htf2 ? ts_htf2 : na, 'HTF2 Trailing Stop', color = css)
+plot_ts_htf3 = plot(show_ts_htf3 ? ts_htf3 : na, 'HTF3 Trailing Stop', color = css)
+
+
+
+// Define invisible plots for high and low
+plot_high = plot(high, title="High", color=na, display=display.none)
+plot_low = plot(low, title="Low", color=na, display = display.none)
+// Determine if the price is above or below the trailing stop
+price_above_ts_htf1 = close > ts_htf1
+price_below_ts_htf1 = close < ts_htf1
+price_above_ts_htf2 = close > ts_htf2
+price_below_ts_htf2 = close < ts_htf2
+price_above_ts_htf3 = close > ts_htf3
+price_below_ts_htf3 = close < ts_htf3
+
+// // Calculate midpoints
+
+midpoint_candle = (high + low) / 2
+plot_midpoint_candle = plot(midpoint_candle, color=na, title="Midpoint Candle", display=display.none)
+
+// Define the colors for the gradients
+color bullishGradientTop = color.new(#000000, 100)
+color bullishGradientBottom = color.new(#03d5fe, 80) 
+color bearishGradientTop = color.new(#fe02fe, 80) 
+color bearishGradientBottom = color.new(#000000, 100) 
+fill(plot_ts_htf1, plot_midpoint_candle, price_above_ts_htf1 ? ts_htf2 : na, high, bullishGradientTop, bullishGradientBottom)
+fill(plot_ts_htf1, plot_midpoint_candle, price_below_ts_htf1 ? low : na, ts_htf2, bearishGradientTop, bearishGradientBottom)
+fill(plot_ts_htf2, plot_midpoint_candle, price_above_ts_htf2 ? ts_htf2 : na, high, bullishGradientTop, bullishGradientBottom)
+fill(plot_ts_htf2, plot_midpoint_candle, price_below_ts_htf2 ? low : na, ts_htf2, bearishGradientTop, bearishGradientBottom)
+fill(plot_ts_htf3, plot_midpoint_candle, price_above_ts_htf3 ? ts_htf3 : na, high, bullishGradientTop, bullishGradientBottom)
+fill(plot_ts_htf3, plot_midpoint_candle, price_below_ts_htf3 ? low : na, ts_htf3, bearishGradientTop, bearishGradientBottom)
+
+
+chart_trend := trendingUp ? 1.0 : trendingDown ? -1.0 : na
+HTF1_trend := trendingUpHTF1 ? 1.0 : trendingDownHTF1 ? -1.0 : na
+HTF2_trend := trendingUpHTF2 ? 1.0 : trendingDownHTF2 ? -1.0 : na
+HTF3_trend := trendingUpHTF3 ? 1.0 : trendingDownHTF3 ? -1.0 : na
+plot(chart_trend, title="chart trend", color=color.rgb(76, 175, 79, 100))
+plot(HTF1_trend, title="HTF1 trend", color=color.rgb(76, 175, 79, 100))
+plot(HTF2_trend, title="HTF2 trend", color=color.rgb(76, 175, 79, 100))
+plot(HTF3_trend, title="HTF3 trend", color=color.rgb(76, 175, 79, 100))
+
+
+
+// TD Plots
+plotshape(TD8buy, title="TD 8 Buy", style=shape.labelup, color=color.new (bullish3, 60), size=size.tiny, location=location.belowbar)
+plotshape(TD9buy, title="TD 9 Buy", style=shape.diamond, color=color.new(bullish2, 60), size=size.tiny, location=location.belowbar)
+plotshape(TD8sell, title="TD 8 Sell", style=shape.labeldown, color=color.new (bearish3, 60), size=size.tiny, location=location.abovebar)
+plotshape(TD9sell, title="TD 9 Sell", style=shape.diamond, color=color.new(bearish2, 60), size=size.tiny, location=location.abovebar)
+
+
+
+var tbb = TTBTableBuilder.new(position.top_right,3,2)
+if barstate.isconfirmed
+	header = tbb.R(0).TextColor(color.rgb(18, 247, 255)).TextSize(size.small).Font(font.family_monospace)
+	header.Text("HTF1","HTF2","HTF3")
+    tbb.R(1).TextColor(color.white).TextSize(size.small).Text(str.tostring(trendstatusHTF1),str.tostring(trendstatusHTF2),str.tostring(trendstatusHTF3)).Bg(color.rgb(255, 255, 255, 74))
+	// tbb.R(2).TextColor(color.white).TextSize(size.small).Text("A","B","C")
